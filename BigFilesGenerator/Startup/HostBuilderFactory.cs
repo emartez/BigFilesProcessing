@@ -1,6 +1,8 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using BigFilesGenerator.Configurations;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Scrutor;
 using Serilog;
 using System;
 
@@ -12,7 +14,7 @@ namespace BigFilesGenerator.Startup
         {
             var configuration = BuildConfiguration();
             Log.Logger = new LoggerConfiguration()
-                .ReadFrom.Configuration(configuration.Build())
+                .ReadFrom.Configuration(configuration)
                 .CreateLogger();
 
             Log.Information("Creating host builder");
@@ -22,7 +24,12 @@ namespace BigFilesGenerator.Startup
                 return Host.CreateDefaultBuilder(args)
                     .ConfigureServices((hostingContext, services) =>
                     {
-                        services.AddTransient<IStartupService, StartupService>();
+                        services.Scan(scan =>
+                            scan.FromCallingAssembly()
+                                .AddClasses()
+                                .AsMatchingInterface());
+
+                        services.Configure<GeneratorOptions>(configuration.GetSection(GeneratorOptions.Generator));
                     })
                     .ConfigureLogging(logging =>
                     {
@@ -40,12 +47,13 @@ namespace BigFilesGenerator.Startup
             }
         }
 
-        static IConfigurationBuilder BuildConfiguration()
+        static IConfigurationRoot BuildConfiguration()
         {
             return new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                 .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Production"}.json", optional: true, reloadOnChange: true)
-                .AddEnvironmentVariables();
+                .AddEnvironmentVariables()
+                .Build();
         }
     }
 }
