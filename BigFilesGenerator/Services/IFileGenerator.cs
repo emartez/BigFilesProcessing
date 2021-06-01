@@ -2,8 +2,8 @@
 
 namespace BigFilesGenerator.Services
 {
-    public interface IFileGenerator
+    public interface IFileContentGenerator
     {
-        Task Generate(string destinationFile, byte maxFileSizeInGb);
+        Task Generate(byte maxFileSizeInGb);
     }
 }

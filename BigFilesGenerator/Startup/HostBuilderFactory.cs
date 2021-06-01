@@ -1,8 +1,8 @@
 ﻿using BigFilesGenerator.Configurations;
+using BigFilesGenerator.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Scrutor;
 using Serilog;
 using System;
 
@@ -30,6 +30,7 @@ namespace BigFilesGenerator.Startup
                                 .AsMatchingInterface()
                                 .WithTransientLifetime());
 
+                        services.AddSingleton<FileWriter>();
                         services.Configure<GeneratorOptions>(configuration.GetSection(GeneratorOptions.Generator));
                     })
                     .ConfigureLogging(logging =>
