@@ -1,5 +1,6 @@
 ﻿using BigFilesGenerator.Configurations;
 using Microsoft.Extensions.Options;
+using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
@@ -20,13 +21,16 @@ namespace BigFilesGenerator.Services
             _token = _source.Token;
             _generateOptions = generateOptions.Value;
             _filePath = Path.Combine(_generateOptions.DestinationDirectory, _generateOptions.DestinationFileName);
+        }
 
+        public void Run()
+        {
             // This is the task that will run
             // in the background and do the actual file writing
             Task.Run(WriteToFile, _token);
         }
 
-        /// The public method where a thread can ask for a line
+        /// The public method where a thread can ask for a text
         /// to be written.
         public void WriteText(string text)
         {
@@ -50,9 +54,14 @@ namespace BigFilesGenerator.Services
                         await w.WriteAsync(text);
                     }
                     w.Flush();
-                    Thread.Sleep(100);
                 }
+                Thread.Sleep(100);
             }
+        }
+
+        private void ClearDestination()
+        {
+            throw new NotImplementedException();
         }
     }
 }

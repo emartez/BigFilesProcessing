@@ -12,13 +12,16 @@ namespace BigFilesGenerator.Startup
     {
         private readonly ILogger<StartupService> _logger;
         private readonly GeneratorOptions _generateOptions;
-        private readonly IFileContentGenerator _fileGenerator;
+        private readonly IFileGenerator _fileGenerator;
+        private readonly FileWriter _fileWriter;
 
-        public StartupService(ILogger<StartupService> logger, IOptions<GeneratorOptions> generateOptions, IFileContentGenerator fileGenerator)
+        public StartupService(ILogger<StartupService> logger, IOptions<GeneratorOptions> generateOptions
+            , IFileGenerator fileGenerator, FileWriter fileWriter)
         {
             _logger = logger;
             _generateOptions = generateOptions.Value;
             _fileGenerator = fileGenerator;
+            _fileWriter = fileWriter;
         }
 
         public async Task Run()
@@ -34,7 +37,10 @@ namespace BigFilesGenerator.Startup
             if (expectedFileSize > _generateOptions.MaxFileSizeInGb)
                 throw new InvalidDataException($"Incorrect file size. It should be in range 1-{_generateOptions.MaxFileSizeInGb} GB");
 
+            await IOService.RecreateDirectory(_generateOptions.DestinationDirectory);
             _logger.LogInformation($"Root data path is {_generateOptions.DestinationDirectory}");
+
+            _fileWriter.Run();
             await _fileGenerator.Generate(expectedFileSize);
         }
     }
