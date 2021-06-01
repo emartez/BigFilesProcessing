@@ -1,7 +1,9 @@
-﻿namespace BigFilesGenerator.Services
+﻿using System.Threading.Tasks;
+
+namespace BigFilesGenerator.Services
 {
     public interface ISentencesGenerator
     {
-        string[] GenerateData(int sencencesNumber = 1000);
+        Task<string> GenerateData(int sencencesNumber = 1000);
     }
 }

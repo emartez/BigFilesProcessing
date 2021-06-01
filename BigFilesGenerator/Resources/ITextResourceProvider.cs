@@ -1,8 +1,10 @@
-﻿namespace BigFilesGenerator.Resources
+﻿using System.Threading.Tasks;
+
+namespace BigFilesGenerator.Resources
 {
     public interface ITextResourceProvider
     {
-        string ReadResource(string name);
-        string[] ReadResourceLines(string name);
+        Task<string> ReadResource(string name);
+        Task<string[]> ReadResourceLines(string name);
     }
 }

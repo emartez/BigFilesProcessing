@@ -1,7 +1,9 @@
-﻿namespace BigFilesGenerator.Services
+﻿using System.Threading.Tasks;
+
+namespace BigFilesGenerator.Services
 {
     public interface IFileGenerator
     {
-        void Generate(string destinationFile, byte maxFileSizeInGb);
+        Task Generate(string destinationFile, byte maxFileSizeInGb);
     }
 }

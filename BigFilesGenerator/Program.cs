@@ -2,19 +2,20 @@
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using System;
+using System.Threading.Tasks;
 
 namespace BigFilesGenerator
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             var host = HostBuilderFactory.CreateHostBuilder(args).Build();
 
             try
             {
                 var svc = ActivatorUtilities.CreateInstance<StartupService>(host.Services);
-                svc.Run();
+                await svc.Run();
             }
             catch(Exception ex)
             {

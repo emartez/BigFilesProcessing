@@ -27,7 +27,8 @@ namespace BigFilesGenerator.Startup
                         services.Scan(scan =>
                             scan.FromCallingAssembly()
                                 .AddClasses()
-                                .AsMatchingInterface());
+                                .AsMatchingInterface()
+                                .WithTransientLifetime());
 
                         services.Configure<GeneratorOptions>(configuration.GetSection(GeneratorOptions.Generator));
                     })

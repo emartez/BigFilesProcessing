@@ -1,7 +1,9 @@
-﻿namespace BigFilesGenerator.Startup
+﻿using System.Threading.Tasks;
+
+namespace BigFilesGenerator.Startup
 {
     public interface IStartupService
     {
-        void Run();
+        Task Run();
     }
 }

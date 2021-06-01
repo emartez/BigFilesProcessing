@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace BigFilesGenerator.Startup
 {
@@ -20,7 +21,7 @@ namespace BigFilesGenerator.Startup
             _fileGenerator = fileGenerator;
         }
 
-        public void Run()
+        public async Task Run()
         {
             _logger.LogInformation("Startup service started");
 
@@ -34,7 +35,7 @@ namespace BigFilesGenerator.Startup
                 throw new InvalidDataException("Incorrect file size. It should be in range 1-100 GB");
 
             var destinationFile = Path.Combine(_generateOptions.DestinationDirectory, _generateOptions.DestinationFileName);
-            _fileGenerator.Generate(destinationFile, expectedFileSize);
+            await _fileGenerator.Generate(destinationFile, expectedFileSize);
         }
     }
 }

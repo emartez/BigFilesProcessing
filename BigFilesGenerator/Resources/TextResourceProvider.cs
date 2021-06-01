@@ -1,12 +1,13 @@
 ﻿using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace BigFilesGenerator.Resources
 {
     public class TextResourceProvider : ITextResourceProvider
     {
-        public string ReadResource(string name)
+        public async Task<string> ReadResource(string name)
         {
             // Determine path
             var assembly = Assembly.GetExecutingAssembly();
@@ -18,15 +19,13 @@ namespace BigFilesGenerator.Resources
                     .Single(str => str.EndsWith(name));
             }
 
-            using (Stream stream = assembly.GetManifestResourceStream(resourcePath))
-            using (StreamReader reader = new StreamReader(stream))
-            {
-                return reader.ReadToEnd();
-            }
+            using Stream stream = assembly.GetManifestResourceStream(resourcePath);
+            using StreamReader reader = new(stream);
+            return await reader.ReadToEndAsync();
         }
-        public string[] ReadResourceLines(string name)
+        public async Task<string[]> ReadResourceLines(string name)
         {
-            var resourceText = ReadResource(name);
+            var resourceText = await ReadResource(name);
             return resourceText.Split("\r\n");
         }
     }
