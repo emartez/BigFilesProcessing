@@ -1,4 +1,5 @@
-﻿using BigFilesGenerator.Configurations;
+﻿using BigFilesGenerator.BackgroundJobs;
+using BigFilesGenerator.Configurations;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
@@ -15,17 +16,20 @@ namespace BigFilesGenerator.Services
     public class FileGenerator : IFileGenerator
     {
         private readonly ISentencesGenerator _sentencesGenerator;
+        private readonly IBackgroundFileWriterQueue _fileWriterQueue;
         private readonly ILogger<FileGenerator> _logger;
         private readonly GeneratorOptions _options;
         private readonly FileWriter _fileWriter;
         private static ConcurrentDictionary<Guid, bool> _currentTasks = new ConcurrentDictionary<Guid, bool>();
 
-        public FileGenerator(ISentencesGenerator sentencesGenerator, 
+        public FileGenerator(ISentencesGenerator sentencesGenerator,
+            IBackgroundFileWriterQueue fileWriterQueue,
             ILogger<FileGenerator> logger, 
             IOptions<GeneratorOptions> options,
             FileWriter fileWriter)
         {
             _sentencesGenerator = sentencesGenerator;
+            _fileWriterQueue = fileWriterQueue;
             _options = options.Value;
             _logger = logger;
             _fileWriter = fileWriter;
@@ -120,7 +124,7 @@ namespace BigFilesGenerator.Services
             if (cancellationToken.IsCancellationRequested)
                 return;
 
-            var _filePath = Path.Combine(_options.DestinationDirectory, $"{Guid.NewGuid()}.txt");
+            //var _filePath = Path.Combine(_options.DestinationDirectory, $"{Guid.NewGuid()}.txt");
 
             //using (StreamWriter w = File.AppendText(_filePath))
             //{
@@ -128,7 +132,8 @@ namespace BigFilesGenerator.Services
             //    w.Close();
             //}
 
-            _fileWriter.WriteText(sentences);
+            //_fileWriter.WriteText(sentences);
+            _fileWriterQueue.EnqueueText(sentences);
         }
 
         #region Chunks

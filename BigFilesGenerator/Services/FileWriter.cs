@@ -139,12 +139,12 @@ namespace BigFilesGenerator.Services
                 //}
 
                 var iterations = 0;
-                using (StreamWriter w = new StreamWriter(_filePath))
+                using (StreamWriter w = File.AppendText(_filePath))
                 {
                     while (iterations < 50 && _isRunning && !_token.IsCancellationRequested && _textToWrite.TryDequeue(out StringBuilder text))
                     {
                         _processedSize += text.Length;
-                        await w.WriteAsync(text, _token);
+                        w.Write(text);
                         
                         iterations++;
                     }

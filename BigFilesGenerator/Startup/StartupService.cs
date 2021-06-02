@@ -1,5 +1,6 @@
 ﻿using BigFilesGenerator.Configurations;
 using BigFilesGenerator.Services;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
@@ -9,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace BigFilesGenerator.Startup
 {
-    public class StartupService
+    public class StartupService : IHostedService
     {
         private readonly ILogger<StartupService> _logger;
         private readonly GeneratorOptions _generateOptions;
@@ -26,6 +27,16 @@ namespace BigFilesGenerator.Startup
             _fileWriter = fileWriter;
         }
 
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
         public async Task Run()
         {
             _logger.LogInformation("Application started.");
@@ -35,10 +46,10 @@ namespace BigFilesGenerator.Startup
             var expectedFileSize = GetExpectedFileSize();
             var cancelTask = GetCancelTask();
 
-            //await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
+            await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
             //await Task.WhenAny(cancelTask, _fileGenerator.Merge(s_cts.Token));
             //await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
-            await Generate(expectedFileSize, cancelTask);
+            //await Generate(expectedFileSize, cancelTask);
             //await GenerateChunks(expectedFileSize, cancelTask);
         }
 
@@ -57,20 +68,6 @@ namespace BigFilesGenerator.Startup
             });
         }
 
-        private async Task Generate(byte expectedFileSize, Task cancelTask)
-        {
-            _fileWriter.Run(s_cts.Token);
-            await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
-            Console.WriteLine($"Data generation finished, wait for saving file...");
-            //await _fileWriter.Stop();
-        }
-
-        private async Task GenerateChunks(byte expectedFileSize, Task cancelTask)
-        {
-            await Task.WhenAny(cancelTask, _fileGenerator.GenerateChunks(expectedFileSize, s_cts.Token));
-            Console.WriteLine($"Data generation finished.");
-        }
-
         private byte GetExpectedFileSize()
         {
             Console.WriteLine($"\nProvide approximate file size you want to be generated in GB (1-{_generateOptions.MaxFileSizeInGb} GB) -- 1 GB by default: ");
@@ -83,6 +80,20 @@ namespace BigFilesGenerator.Startup
                 throw new InvalidDataException($"Incorrect file size. It should be in range 1-{_generateOptions.MaxFileSizeInGb} GB");
 
             return expectedFileSize;
+        }
+
+        private async Task Generate(byte expectedFileSize, Task cancelTask)
+        {
+            _fileWriter.Run(s_cts.Token);
+            await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
+            Console.WriteLine($"Data generation finished, wait for saving file...");
+            //await _fileWriter.Stop();
+        }
+
+        private async Task GenerateChunks(byte expectedFileSize, Task cancelTask)
+        {
+            await Task.WhenAny(cancelTask, _fileGenerator.GenerateChunks(expectedFileSize, s_cts.Token));
+            Console.WriteLine($"Data generation finished.");
         }
     }
 }
