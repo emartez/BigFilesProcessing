@@ -12,7 +12,7 @@ namespace BigFilesGenerator.Services
     public class SentencesGenerator : ISentencesGenerator
     {
         private const string WORDS_LIBRARY = "Words.txt";
-        private const string SENTENCES_LIBRARY = "Words.txt";
+        private const string SENTENCES_LIBRARY = "Sentences.txt";
 
         private readonly ITextResourceProvider _textResourceProvider;
         private readonly GeneratorOptions _generateOptions;
@@ -35,7 +35,7 @@ namespace BigFilesGenerator.Services
             var randoms = GetRandomNumbers(noOfSentences);
 
             var builder = new StringBuilder();
-            for (int i = 0, sentences = 0; sentences < noOfSentences; i++)
+            for (int i = 0, sentences = 0; sentences < noOfSentences - 1; i++)
             {
                 var number = randoms[sentences];
                 for (int j = 0; j < _generateOptions.SentenceDuplicationOccurrance && sentences < noOfSentences; j++)
@@ -45,7 +45,7 @@ namespace BigFilesGenerator.Services
 
                     builder.Append(randoms[sentences]).Append('.').Append(_sentences[i]).Append(number);
                     builder.Append("\r\n");
-                    sentences += 1;
+                    sentences++;
                 }
             }
 

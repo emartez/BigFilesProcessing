@@ -29,12 +29,23 @@ namespace BigFilesGenerator.Startup
         public async Task Run()
         {
             _logger.LogInformation("Application started.");
-            await IOService.RecreateDirectory(_generateOptions.DestinationDirectory);
-            _logger.LogInformation($"Destination recreated. Data path is {_generateOptions.DestinationDirectory}");
-            var expectedFileSize = GetExpectedFileSize();
+            await IOService.RecreateDirectory(_generateOptions.DestinationDirectory, _logger);
+            await IOService.RecreateDirectory(_generateOptions.ResultDirectory, _logger);
 
+            var expectedFileSize = GetExpectedFileSize();
+            var cancelTask = GetCancelTask();
+
+            //await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
+            //await Task.WhenAny(cancelTask, _fileGenerator.Merge(s_cts.Token));
+            //await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
+            await Generate(expectedFileSize, cancelTask);
+            //await GenerateChunks(expectedFileSize, cancelTask);
+        }
+
+        private Task GetCancelTask()
+        {
             Console.WriteLine("Press the ENTER key to cancel...\n");
-            Task cancelTask = Task.Run(() =>
+            return Task.Run(() =>
             {
                 while (Console.ReadKey().Key != ConsoleKey.Enter)
                 {
@@ -44,11 +55,20 @@ namespace BigFilesGenerator.Startup
                 Console.WriteLine("\nENTER key pressed: cancelling operations...\n");
                 s_cts.Cancel();
             });
+        }
 
+        private async Task Generate(byte expectedFileSize, Task cancelTask)
+        {
             _fileWriter.Run(s_cts.Token);
             await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
             Console.WriteLine($"Data generation finished, wait for saving file...");
-            await _fileWriter.Stop();
+            //await _fileWriter.Stop();
+        }
+
+        private async Task GenerateChunks(byte expectedFileSize, Task cancelTask)
+        {
+            await Task.WhenAny(cancelTask, _fileGenerator.GenerateChunks(expectedFileSize, s_cts.Token));
+            Console.WriteLine($"Data generation finished.");
         }
 
         private byte GetExpectedFileSize()
