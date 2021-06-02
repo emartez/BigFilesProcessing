@@ -6,10 +6,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Resources\Sentences.txt" />
     <None Remove="Resources\words.txt" />
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Resources\Sentences.txt" />
     <EmbeddedResource Include="Resources\Words.txt" />
   </ItemGroup>
 

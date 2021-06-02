@@ -12,8 +12,11 @@ namespace BigFilesGenerator.Services
     public class FileWriter
     {
         internal float TotalSizeInGb => (float)TotalSize / 1000 / 1000 / 1000;
+        internal float CurrentSizeInGb => (float)CurrentSize / 1000 / 1000 / 1000;
+        internal float CurrentWriteQueueLength => _textToWrite.Count;
 
         private static long TotalSize => _textToWrite.Sum(t => (long)t.Length) + _processedSize;
+        private static long CurrentSize => _textToWrite.Sum(t => (long)t.Length);
         private static long _processedSize;
         private static bool _isRunning = false;
 
@@ -110,10 +113,18 @@ namespace BigFilesGenerator.Services
 
                 using (StreamWriter w = File.AppendText(_filePath))
                 {
+                    int currentlyProcessedSize = 0;
+                    int currentlyProcessedSizeInMb = 0;
                     while (_isRunning && !_token.IsCancellationRequested && _textToWrite.TryDequeue(out StringBuilder text))
                     {
                         _processedSize += text.Length;
                         await w.WriteAsync(text, _token);
+
+                        currentlyProcessedSize += text.Length;
+                        currentlyProcessedSizeInMb = currentlyProcessedSize / 1000 / 1000;
+
+                        if (currentlyProcessedSizeInMb > 1000)
+                            break;
                     }
                     w.Flush();
                 }

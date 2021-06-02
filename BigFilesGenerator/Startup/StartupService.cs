@@ -47,6 +47,7 @@ namespace BigFilesGenerator.Startup
 
             _fileWriter.Run(s_cts.Token);
             await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
+            Console.WriteLine($"Data generation finished, wait for saving file...");
             await _fileWriter.Stop();
         }
 

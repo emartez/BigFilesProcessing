@@ -12,14 +12,44 @@ namespace BigFilesGenerator.Services
     public class SentencesGenerator : ISentencesGenerator
     {
         private const string WORDS_LIBRARY = "Words.txt";
+        private const string SENTENCES_LIBRARY = "Words.txt";
 
         private readonly ITextResourceProvider _textResourceProvider;
         private readonly GeneratorOptions _generateOptions;
+
+        private static SemaphoreSlim _sentencesLock = new SemaphoreSlim(1,1);
+        private static string[] _sentences = null;
 
         public SentencesGenerator(ITextResourceProvider textResourceProvider, IOptions<GeneratorOptions> generateOptions)
         {
             _textResourceProvider = textResourceProvider;
             _generateOptions = generateOptions.Value;
+        }
+
+        public async Task<StringBuilder> GenerateQuickData(int noOfSentences, CancellationToken cancellationToken)
+        {
+            await GetSentences(noOfSentences, cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+                return null;
+
+            var randoms = GetRandomNumbers(noOfSentences);
+
+            var builder = new StringBuilder();
+            for (int i = 0, sentences = 0; sentences < noOfSentences; i++)
+            {
+                var number = randoms[sentences];
+                for (int j = 0; j < _generateOptions.SentenceDuplicationOccurrance && sentences < noOfSentences; j++)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        return null;
+
+                    builder.Append(randoms[sentences]).Append('.').Append(_sentences[i]).Append(number);
+                    builder.Append("\r\n");
+                    sentences += 1;
+                }
+            }
+
+            return builder;
         }
 
         public async Task<StringBuilder> GenerateData(int noOfSentences, CancellationToken cancellationToken)
@@ -28,11 +58,11 @@ namespace BigFilesGenerator.Services
             if (cancellationToken.IsCancellationRequested)
                 return null;
 
-            var randoms = GetRandomNumbers(noOfSentences);
+            var randoms = GetRandomNumbers(int.MaxValue);
 
             var builder = new StringBuilder();
             for (int i = 0, sentences = 0; sentences < noOfSentences; i++)
-            {                
+            {
                 for (int j = 0; j < _generateOptions.SentenceDuplicationOccurrance && sentences < noOfSentences; j++)
                 {
                     if (cancellationToken.IsCancellationRequested)
@@ -49,6 +79,30 @@ namespace BigFilesGenerator.Services
             }
 
             return builder;
+        }
+
+        private async Task GetSentences(int noOfSentences, CancellationToken cancellationToken)
+        {
+            if (_sentences == null)
+            {
+                await _sentencesLock.WaitAsync(cancellationToken);
+                try
+                {
+                    if (_sentences == null)
+                    {
+                        if (cancellationToken.IsCancellationRequested) return;
+
+                        var words = await _textResourceProvider.ReadResourceLines(SENTENCES_LIBRARY);
+                        var merges = noOfSentences / words.Length / _generateOptions.SentenceDuplicationOccurrance;
+
+                        _sentences = Enumerable.Repeat(words, merges + 1).SelectMany(c => c).ToArray();
+                    }
+                } 
+                finally
+                {
+                    _sentencesLock.Release();
+                }
+            }
         }
 
         private async Task<string[][]> GetWordsSentenceTable(int noOfSentences, CancellationToken cancellationToken)
@@ -93,7 +147,7 @@ namespace BigFilesGenerator.Services
             var result = new int[noOfItems];
             for (int i = 0; i < noOfItems - 1; i++)
             {
-                result[i] = rand.Next(1,noOfItems);
+                result[i] = rand.Next();
             }
 
             return result;
