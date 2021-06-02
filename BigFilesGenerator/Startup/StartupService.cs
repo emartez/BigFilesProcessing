@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BigFilesGenerator.Startup
@@ -14,6 +15,7 @@ namespace BigFilesGenerator.Startup
         private readonly GeneratorOptions _generateOptions;
         private readonly IFileGenerator _fileGenerator;
         private readonly FileWriter _fileWriter;
+        static readonly CancellationTokenSource s_cts = new CancellationTokenSource();
 
         public StartupService(ILogger<StartupService> logger, IOptions<GeneratorOptions> generateOptions
             , IFileGenerator fileGenerator, FileWriter fileWriter)
@@ -26,8 +28,30 @@ namespace BigFilesGenerator.Startup
 
         public async Task Run()
         {
-            _logger.LogInformation("Startup service started");
+            _logger.LogInformation("Application started.");
+            await IOService.RecreateDirectory(_generateOptions.DestinationDirectory);
+            _logger.LogInformation($"Destination recreated. Data path is {_generateOptions.DestinationDirectory}");
+            var expectedFileSize = GetExpectedFileSize();
 
+            Console.WriteLine("Press the ENTER key to cancel...\n");
+            Task cancelTask = Task.Run(() =>
+            {
+                while (Console.ReadKey().Key != ConsoleKey.Enter)
+                {
+                    Console.WriteLine("Press the ENTER key to cancel...");
+                }
+
+                Console.WriteLine("\nENTER key pressed: cancelling operations...\n");
+                s_cts.Cancel();
+            });
+
+            _fileWriter.Run(s_cts.Token);
+            await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
+            await _fileWriter.Stop();
+        }
+
+        private byte GetExpectedFileSize()
+        {
             Console.WriteLine($"\nProvide approximate file size you want to be generated in GB (1-{_generateOptions.MaxFileSizeInGb} GB) -- 1 GB by default: ");
             var expectedFileSizeInput = Console.ReadLine();
 
@@ -37,12 +61,7 @@ namespace BigFilesGenerator.Startup
             if (expectedFileSize > _generateOptions.MaxFileSizeInGb)
                 throw new InvalidDataException($"Incorrect file size. It should be in range 1-{_generateOptions.MaxFileSizeInGb} GB");
 
-            await IOService.RecreateDirectory(_generateOptions.DestinationDirectory);
-            _logger.LogInformation($"Root data path is {_generateOptions.DestinationDirectory}");
-
-            _fileWriter.Run();
-            await _fileGenerator.Generate(expectedFileSize);
-            await _fileWriter.Stop();
+            return expectedFileSize;
         }
     }
 }

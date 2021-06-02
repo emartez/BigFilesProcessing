@@ -1,9 +1,11 @@
-﻿using System.Threading.Tasks;
+﻿using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace BigFilesGenerator.Services
 {
     public interface ISentencesGenerator
     {
-        Task<string> GenerateData(int sencencesNumber = 1000);
+        Task<StringBuilder> GenerateData(int sencencesNumber, CancellationToken cancellationToken);
     }
 }

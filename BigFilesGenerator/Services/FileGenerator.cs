@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BigFilesGenerator.Services
@@ -28,29 +29,38 @@ namespace BigFilesGenerator.Services
             _generateOptions = generateOptions.Value;
         }
 
-        public async Task Generate(byte maxFileSizeInGb)
+        public async Task Generate(byte maxFileSizeInGb, CancellationToken cancellationToken)
         {
             var stopWatch = new Stopwatch();
-            stopWatch.Start();
             float totalSizeInGb = 0;
             int iterate = 0;
             int noOfFiles = 0;
 
-            while (totalSizeInGb < maxFileSizeInGb && iterate < 100)
+            if (cancellationToken.IsCancellationRequested) 
+                return;
+
+            stopWatch.Start();
+            while (totalSizeInGb < maxFileSizeInGb && iterate < 100 && !cancellationToken.IsCancellationRequested)
             {
                 List<Task> tasks = new();
                 for (int i = 0; i < 80; i++)
                 {
+                    if (cancellationToken.IsCancellationRequested)
+                        break;
+
                     var chunkName = $"data_{noOfFiles++}.txt";
-                    tasks.Add(GenerateChunk(_generateOptions.DestinationDirectory, chunkName));
+                    tasks.Add(GenerateChunk(_generateOptions.DestinationDirectory, chunkName, cancellationToken));
 
                     //await GenerateChunk(destinationDirectory, $"data.txt");
                 }
 
-                Task t = Task.WhenAll(tasks);
+                Task t = Task.Run(() => Task.WhenAll(tasks), cancellationToken);
                 try
                 {
                     await t;
+
+                    if (cancellationToken.IsCancellationRequested)
+                        return;
                 }
                 catch { }
 
@@ -68,10 +78,12 @@ namespace BigFilesGenerator.Services
             Console.WriteLine($"Elapsed time: {stopWatch.Elapsed.TotalSeconds}");
         }
 
-        private async Task GenerateChunk(string destinationDirectory, string destinationFile)
+        private async Task GenerateChunk(string destinationDirectory, string destinationFile, CancellationToken cancellationToken)
         {
             //var process = Process.GetCurrentProcess();
-            var sentences = await _sentencesGenerator.GenerateData(20000);
+            var sentences = await _sentencesGenerator.GenerateData(20000, cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+                return;
 
             //var destinationFilePath = Path.Combine(destinationDirectory, destinationFile);
             //Console.WriteLine($"Scheduled generating file: {destinationFilePath}");

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -18,28 +19,27 @@ namespace BigFilesGenerator.Services
 
         //private static readonly object WriterLock = new object();
         private static readonly SemaphoreSlim writerLock = new SemaphoreSlim(1,1);
-        private static ConcurrentQueue<string> _textToWrite = new ConcurrentQueue<string>();
+        private static ConcurrentQueue<StringBuilder> _textToWrite = new ConcurrentQueue<StringBuilder>();
         private readonly GeneratorOptions _generateOptions;
-        private CancellationTokenSource _source = new CancellationTokenSource();
         private CancellationToken _token;
         private readonly string _filePath;
 
         public FileWriter(IOptions<GeneratorOptions> generateOptions)
         {
-            _token = _source.Token;
             _generateOptions = generateOptions.Value;
             _filePath = Path.Combine(_generateOptions.DestinationDirectory, _generateOptions.DestinationFileName);
         }
 
-        public void Run()
+        public void Run(CancellationToken cancellationToken)
         {
             if (!_isRunning)
             {
-                writerLock.Wait();
+                writerLock.Wait(_token);
                 try
                 {
                     if (!_isRunning)
                     {
+                        _token = cancellationToken;
                         _isRunning = true;
                         _textToWrite.Clear();
                         _processedSize = 0;
@@ -59,18 +59,21 @@ namespace BigFilesGenerator.Services
         {
             if (_isRunning)
             {
-                await writerLock.WaitAsync();
+                if (_token.IsCancellationRequested)
+                    return;
+
+                await writerLock.WaitAsync(_token);
                 try
                 {
                     if (_textToWrite.Any())
                     {
                         var queuePositions = _textToWrite.Count;
-                        await Task.Delay(100);
+                        await Task.Delay(100, _token);
 
                         while (_textToWrite.Any() && queuePositions > _textToWrite.Count)
                         {
                             queuePositions = _textToWrite.Count;
-                            await Task.Delay(100);
+                            await Task.Delay(100, _token);
                         }
                     }
 
@@ -89,7 +92,7 @@ namespace BigFilesGenerator.Services
 
         /// The public method where a thread can ask for a text
         /// to be written.
-        public void WriteText(string text)
+        public void WriteText(StringBuilder text)
         {
             _textToWrite.Enqueue(text);
         }
@@ -107,15 +110,15 @@ namespace BigFilesGenerator.Services
 
                 using (StreamWriter w = File.AppendText(_filePath))
                 {
-                    while (_isRunning && _textToWrite.TryDequeue(out string text))
+                    while (_isRunning && !_token.IsCancellationRequested && _textToWrite.TryDequeue(out StringBuilder text))
                     {
                         _processedSize += text.Length;
-                        await w.WriteAsync(text);
+                        await w.WriteAsync(text, _token);
                     }
                     w.Flush();
                 }
 
-                await Task.Delay(100);
+                await Task.Delay(100, _token);
             }
         }
     }

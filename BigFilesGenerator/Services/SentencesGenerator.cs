@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BigFilesGenerator.Services
@@ -21,16 +22,22 @@ namespace BigFilesGenerator.Services
             _generateOptions = generateOptions.Value;
         }
 
-        public async Task<string> GenerateData(int noOfSentences)
+        public async Task<StringBuilder> GenerateData(int noOfSentences, CancellationToken cancellationToken)
         {
-            var sentenceWordsTable = await GetWordsSentenceTable(noOfSentences);
+            var sentenceWordsTable = await GetWordsSentenceTable(noOfSentences, cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+                return null;
+
             var randoms = GetRandomNumbers(noOfSentences);
 
             var builder = new StringBuilder();
             for (int i = 0, sentences = 0; sentences < noOfSentences; i++)
             {                
                 for (int j = 0; j < _generateOptions.SentenceDuplicationOccurrance && sentences < noOfSentences; j++)
-                {        
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        return null;
+
                     builder.Append(randoms[sentences]).Append('.');
 
                     for (int k = 0; k < _generateOptions.MaxWordsInSentence; k++)
@@ -41,11 +48,13 @@ namespace BigFilesGenerator.Services
                 }
             }
 
-            return builder.ToString();
+            return builder;
         }
 
-        private async Task<string[][]> GetWordsSentenceTable(int noOfSentences)
+        private async Task<string[][]> GetWordsSentenceTable(int noOfSentences, CancellationToken cancellationToken)
         {
+            if (cancellationToken.IsCancellationRequested) return null;
+
             var words = await _textResourceProvider.ReadResourceLines(WORDS_LIBRARY);
             var merges = noOfSentences / words.Length / _generateOptions.SentenceDuplicationOccurrance;
 
@@ -55,6 +64,9 @@ namespace BigFilesGenerator.Services
 
             for (byte i = 0; i < _generateOptions.MaxWordsInSentence; i++)
             {
+                if (cancellationToken.IsCancellationRequested)
+                    return null;
+
                 Randomize(sentenceWords, ref sentenceWordsTable[i]);
             }
 
