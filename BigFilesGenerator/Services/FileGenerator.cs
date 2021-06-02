@@ -31,15 +31,15 @@ namespace BigFilesGenerator.Services
         public async Task Generate(byte maxFileSizeInGb)
         {
             var stopWatch = new Stopwatch();
+            stopWatch.Start();
             float totalSizeInGb = 0;
             int iterate = 0;
             int noOfFiles = 0;
-            do
+
+            while (totalSizeInGb < maxFileSizeInGb && iterate < 100)
             {
                 List<Task> tasks = new();
-                stopWatch.Start();
-
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < 80; i++)
                 {
                     var chunkName = $"data_{noOfFiles++}.txt";
                     tasks.Add(GenerateChunk(_generateOptions.DestinationDirectory, chunkName));
@@ -47,32 +47,36 @@ namespace BigFilesGenerator.Services
                     //await GenerateChunk(destinationDirectory, $"data.txt");
                 }
 
-                await Task.WhenAll(tasks);
-                stopWatch.Stop();
+                Task t = Task.WhenAll(tasks);
+                try
+                {
+                    await t;
+                }
+                catch { }
 
-                DirectoryInfo info = new DirectoryInfo(_generateOptions.DestinationDirectory);
-                totalSizeInGb = info.EnumerateFiles().Sum(file => file.Length) / 1024f / 1024f / 1024f;
+                if (t.Status == TaskStatus.Faulted)
+                    Console.WriteLine("Generation attempt failed");
 
-                var totalSizePercentage = totalSizeInGb / maxFileSizeInGb * 100;
-                Console.WriteLine($"Total size of directory {_generateOptions.DestinationDirectory} is {totalSizeInGb:0.00}[GB] ({totalSizePercentage:0.00}%)");
+                totalSizeInGb = _fileWriter.TotalSizeInGb;
+                var totalSizePercentage = totalSizeInGb / maxFileSizeInGb * 100; //%
+                Console.WriteLine($"Total size of result file is {totalSizeInGb:0.00}[GB] ({totalSizePercentage:0.00}%)");
 
                 iterate++;
-            } while (totalSizeInGb < maxFileSizeInGb && iterate < 50);
+            };
 
+            stopWatch.Stop();
             Console.WriteLine($"Elapsed time: {stopWatch.Elapsed.TotalSeconds}");
         }
 
         private async Task GenerateChunk(string destinationDirectory, string destinationFile)
         {
-            var process = Process.GetCurrentProcess();
-            var sentences = await _sentencesGenerator.GenerateData(5000000);
-            //var size = sentences.
-            //var loops = 100; //~50MB
+            //var process = Process.GetCurrentProcess();
+            var sentences = await _sentencesGenerator.GenerateData(20000);
 
-            var destinationFilePath = Path.Combine(destinationDirectory, destinationFile);
+            //var destinationFilePath = Path.Combine(destinationDirectory, destinationFile);
+            //Console.WriteLine($"Scheduled generating file: {destinationFilePath}");
 
-            Console.WriteLine($"Scheduled generating file: {destinationFilePath}");
-            //_fileWriter.WriteText(sentences);
+            _fileWriter.WriteText(sentences);
         }
     }
 }

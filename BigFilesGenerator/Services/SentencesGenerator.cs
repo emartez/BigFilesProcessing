@@ -34,7 +34,7 @@ namespace BigFilesGenerator.Services
                     builder.Append(randoms[sentences]).Append('.');
 
                     for (int k = 0; k < _generateOptions.MaxWordsInSentence; k++)
-                        builder.Append(sentenceWordsTable[k][i]);
+                        builder.Append(' ').Append(sentenceWordsTable[k][i]);
 
                     builder.Append("\r\n");
                     sentences += 1;
@@ -51,6 +51,7 @@ namespace BigFilesGenerator.Services
 
             var sentenceWords = Enumerable.Repeat(words, merges + 1).SelectMany(c => c).ToArray();
             string[][] sentenceWordsTable = new string[_generateOptions.MaxWordsInSentence][];
+            sentenceWordsTable[1] = sentenceWords;
 
             for (byte i = 0; i < _generateOptions.MaxWordsInSentence; i++)
             {

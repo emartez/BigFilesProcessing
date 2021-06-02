@@ -42,6 +42,7 @@ namespace BigFilesGenerator.Startup
 
             _fileWriter.Run();
             await _fileGenerator.Generate(expectedFileSize);
+            await _fileWriter.Stop();
         }
     }
 }
