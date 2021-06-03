@@ -5,7 +5,6 @@ using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,12 +15,12 @@ namespace BigFilesGenerator.Services
         private readonly ISentencesGenerator _sentencesGenerator;
         private readonly IBackgroundFileWriterQueue _writerQueue;
         private readonly ILogger<FileGenerator> _logger;
-        private readonly GeneratorOptions _options;
+        private readonly SorterOptions _options;
 
         public FileGenerator(ISentencesGenerator sentencesGenerator,
             IBackgroundFileWriterQueue writerQueue,
             ILogger<FileGenerator> logger,
-            IOptions<GeneratorOptions> options)
+            IOptions<SorterOptions> options)
         {
             _sentencesGenerator = sentencesGenerator ?? throw new ArgumentNullException(nameof(sentencesGenerator));
             _writerQueue = writerQueue ?? throw new ArgumentNullException(nameof(writerQueue));
@@ -29,7 +28,7 @@ namespace BigFilesGenerator.Services
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         }
 
-        public async Task Generate(byte maxFileSizeInGb, CancellationToken cancellationToken)
+        public async Task GenerateAsync(byte maxFileSizeInGb, CancellationToken cancellationToken)
         {
             float totalSizeInGb = 0;
             int iteration = 0;

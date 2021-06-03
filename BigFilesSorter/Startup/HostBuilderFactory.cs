@@ -3,8 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using System;
+using BigFilesSorter.Configurations;
 
-namespace BigFilesSorting.Startup
+namespace BigFilesSorter.Startup
 {
     internal static class HostBuilderFactory
     {
@@ -12,7 +13,7 @@ namespace BigFilesSorting.Startup
         {
             var configuration = BuildConfiguration();
             Log.Logger = new LoggerConfiguration()
-                .ReadFrom.Configuration(configuration.Build())
+                .ReadFrom.Configuration(configuration)
                 .CreateLogger();
 
             Log.Information("Creating host builder");
@@ -22,7 +23,14 @@ namespace BigFilesSorting.Startup
                 return Host.CreateDefaultBuilder(args)
                     .ConfigureServices((hostingContext, services) =>
                     {
-                        services.AddTransient<IStartupService, StartupService>();
+                        services.Scan(scan =>
+                            scan.FromCallingAssembly()
+                                .AddClasses()
+                                .AsMatchingInterface()
+                                .WithTransientLifetime());
+
+                        services.Configure<SorterOptions>(configuration.GetSection(SorterOptions.Generator));
+                        services.AddHostedService<StartupService>();
                     })
                     .ConfigureLogging(logging =>
                     {
@@ -40,12 +48,13 @@ namespace BigFilesSorting.Startup
             }
         }
 
-        static IConfigurationBuilder BuildConfiguration()
+        static IConfigurationRoot BuildConfiguration()
         {
             return new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                 .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Production"}.json", optional: true, reloadOnChange: true)
-                .AddEnvironmentVariables();
+                .AddEnvironmentVariables()
+                .Build();
         }
     }
 }

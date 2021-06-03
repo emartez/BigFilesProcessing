@@ -5,6 +5,6 @@ namespace BigFilesGenerator.Services
 {
     public interface IFileGenerator
     {
-        Task Generate(byte maxFileSizeInGb, CancellationToken cancellationToken);
+        Task GenerateAsync(byte maxFileSizeInGb, CancellationToken cancellationToken);
     }
 }

@@ -15,9 +15,9 @@ namespace BigFilesGenerator.BackgroundJobs
     {
         private readonly IBackgroundFileWriterQueue _writerQueue;
         private readonly ILogger<BackgroundHostedFileWriter> _logger;
-        private readonly GeneratorOptions _options;
+        private readonly SorterOptions _options;
 
-        public BackgroundHostedFileWriter(IBackgroundFileWriterQueue writerQueue, ILogger<BackgroundHostedFileWriter> logger, IOptions<GeneratorOptions> options)
+        public BackgroundHostedFileWriter(IBackgroundFileWriterQueue writerQueue, ILogger<BackgroundHostedFileWriter> logger, IOptions<SorterOptions> options)
         {
             _writerQueue = writerQueue ?? throw new ArgumentNullException(nameof(writerQueue));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
