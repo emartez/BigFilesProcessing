@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace BigFilesGenerator.Services
 {
-    internal class IOService
+    internal class IoService
     {
         public static Task RecreateDirectory(string directory, ILogger logger)
         {

@@ -1,7 +1,5 @@
 ﻿using BigFilesGenerator.BackgroundJobs;
 using BigFilesGenerator.Configurations;
-using BigFilesGenerator.Resources;
-using BigFilesGenerator.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -33,9 +31,9 @@ namespace BigFilesGenerator.Startup
                                 .WithTransientLifetime());
 
                         services.Configure<GeneratorOptions>(configuration.GetSection(GeneratorOptions.Generator));
-                        services.AddSingleton<FileWriter>();
                         services.AddSingleton<IBackgroundFileWriterQueue, BackgroundFileWriterQueue>();
-                        services.AddSingleton<IHostedService, BackgroundHostedFileWriter>();
+                        services.AddHostedService<BackgroundHostedFileWriter>();
+                        services.AddHostedService<StartupService>();
                     })
                     .ConfigureLogging(logging =>
                     {

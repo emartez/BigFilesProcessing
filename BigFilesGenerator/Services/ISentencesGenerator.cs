@@ -6,7 +6,6 @@ namespace BigFilesGenerator.Services
 {
     public interface ISentencesGenerator
     {
-        Task<StringBuilder> GenerateData(int sencencesNumber, CancellationToken cancellationToken);
-        Task<StringBuilder> GenerateQuickData(int noOfSentences, CancellationToken cancellationToken);
+        Task<StringBuilder> GenerateData(int noOfSentences, CancellationToken cancellationToken);
     }
 }

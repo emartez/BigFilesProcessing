@@ -11,22 +11,21 @@ namespace BigFilesGenerator.Services
 {
     public class SentencesGenerator : ISentencesGenerator
     {
-        private const string WORDS_LIBRARY = "Words.txt";
         private const string SENTENCES_LIBRARY = "Sentences.txt";
-
         private readonly ITextResourceProvider _textResourceProvider;
-        private readonly GeneratorOptions _generateOptions;
-
+        private readonly GeneratorOptions _options;
         private static SemaphoreSlim _sentencesLock = new SemaphoreSlim(1,1);
         private static string[] _sentences = null;
 
-        public SentencesGenerator(ITextResourceProvider textResourceProvider, IOptions<GeneratorOptions> generateOptions)
+        public SentencesGenerator(
+            ITextResourceProvider textResourceProvider, 
+            IOptions<GeneratorOptions> options)
         {
-            _textResourceProvider = textResourceProvider;
-            _generateOptions = generateOptions.Value;
+            _textResourceProvider = textResourceProvider ?? throw new ArgumentNullException(nameof(textResourceProvider));
+            _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         }
 
-        public async Task<StringBuilder> GenerateQuickData(int noOfSentences, CancellationToken cancellationToken)
+        public async Task<StringBuilder> GenerateData(int noOfSentences, CancellationToken cancellationToken)
         {
             await GetSentences(noOfSentences, cancellationToken);
             if (cancellationToken.IsCancellationRequested)
@@ -38,7 +37,7 @@ namespace BigFilesGenerator.Services
             for (int i = 0, sentences = 0; sentences < noOfSentences - 1; i++)
             {
                 var number = randoms[sentences];
-                for (int j = 0; j < _generateOptions.SentenceDuplicationOccurrance && sentences < noOfSentences; j++)
+                for (int j = 0; j < _options.SentenceDuplicationOccurrance && sentences < noOfSentences; j++)
                 {
                     if (cancellationToken.IsCancellationRequested)
                         return null;
@@ -46,35 +45,6 @@ namespace BigFilesGenerator.Services
                     builder.Append(randoms[sentences]).Append('.').Append(_sentences[i]).Append(number);
                     builder.Append("\r\n");
                     sentences++;
-                }
-            }
-
-            return builder;
-        }
-
-        public async Task<StringBuilder> GenerateData(int noOfSentences, CancellationToken cancellationToken)
-        {
-            var sentenceWordsTable = await GetWordsSentenceTable(noOfSentences, cancellationToken);
-            if (cancellationToken.IsCancellationRequested)
-                return null;
-
-            var randoms = GetRandomNumbers(int.MaxValue);
-
-            var builder = new StringBuilder();
-            for (int i = 0, sentences = 0; sentences < noOfSentences; i++)
-            {
-                for (int j = 0; j < _generateOptions.SentenceDuplicationOccurrance && sentences < noOfSentences; j++)
-                {
-                    if (cancellationToken.IsCancellationRequested)
-                        return null;
-
-                    builder.Append(randoms[sentences]).Append('.');
-
-                    for (int k = 0; k < _generateOptions.MaxWordsInSentence; k++)
-                        builder.Append(' ').Append(sentenceWordsTable[k][i]);
-
-                    builder.Append("\r\n");
-                    sentences += 1;
                 }
             }
 
@@ -93,7 +63,7 @@ namespace BigFilesGenerator.Services
                         if (cancellationToken.IsCancellationRequested) return;
 
                         var words = await _textResourceProvider.ReadResourceLines(SENTENCES_LIBRARY);
-                        var merges = noOfSentences / words.Length / _generateOptions.SentenceDuplicationOccurrance;
+                        var merges = noOfSentences / words.Length / _options.SentenceDuplicationOccurrance;
 
                         _sentences = Enumerable.Repeat(words, merges + 1).SelectMany(c => c).ToArray();
                     }
@@ -102,42 +72,6 @@ namespace BigFilesGenerator.Services
                 {
                     _sentencesLock.Release();
                 }
-            }
-        }
-
-        private async Task<string[][]> GetWordsSentenceTable(int noOfSentences, CancellationToken cancellationToken)
-        {
-            if (cancellationToken.IsCancellationRequested) return null;
-
-            var words = await _textResourceProvider.ReadResourceLines(WORDS_LIBRARY);
-            var merges = noOfSentences / words.Length / _generateOptions.SentenceDuplicationOccurrance;
-
-            var sentenceWords = Enumerable.Repeat(words, merges + 1).SelectMany(c => c).ToArray();
-            string[][] sentenceWordsTable = new string[_generateOptions.MaxWordsInSentence][];
-            sentenceWordsTable[1] = sentenceWords;
-
-            for (byte i = 0; i < _generateOptions.MaxWordsInSentence; i++)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                    return null;
-
-                Randomize(sentenceWords, ref sentenceWordsTable[i]);
-            }
-
-            return sentenceWordsTable;
-        }
-
-        public static void Randomize<T>(T[] items, ref T[] destinationItems)
-        {
-            Random rand = new Random();
-            destinationItems = new T[items.Length];
-
-            // For each spot in the array, pick
-            // a random item to swap into that spot.
-            for (int i = 0; i < items.Length - 1; i++)
-            {
-                int j = rand.Next(i, items.Length);
-                destinationItems[i] = items[j];
             }
         }
 

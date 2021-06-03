@@ -12,6 +12,7 @@ namespace BigFilesGenerator.Resources
             // Determine path
             var assembly = Assembly.GetExecutingAssembly();
             string resourcePath = name;
+
             // Format: "{Namespace}.{Folder}.{filename}.{Extension}"
             if (!name.StartsWith(nameof(BigFilesGenerator)))
             {

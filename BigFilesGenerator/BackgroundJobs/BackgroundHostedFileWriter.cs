@@ -33,17 +33,31 @@ namespace BigFilesGenerator.BackgroundJobs
 
                 try
                 {
-                    var resultFile = Path.Combine(_options.ResultDirectory, _options.ResultFileName);
-                    using (StreamWriter w = new StreamWriter(resultFile))
+                    var outputFileName = _options.GenerateChunksThenMerge
+                        ? Path.Combine(_options.DestinationDirectory, $"{Guid.NewGuid()}.txt")
+                        : Path.Combine(_options.ResultDirectory, _options.ResultFileName);
+
+                    var iterations = 0;
+                    using (StreamWriter writer = File.AppendText(outputFileName))
                     {
-                        if (!cancellationToken.IsCancellationRequested)
+                        while (!cancellationToken.IsCancellationRequested)
                         {
-                            await w.WriteAsync(text, cancellationToken);
+                            if (iterations >= _options.WriterGenerationLoopLimit) 
+                                break;
+
+                            await writer.WriteAsync(text);
+                            text = await _writerQueue.DequeueAsync(cancellationToken);
+                            iterations++;
                         }
 
-                        w.Flush();
-                        w.Close();
+                        await writer.FlushAsync();
+                        writer.Close();
                     }
+                    await Task.Delay(100, cancellationToken);
+                }
+                catch(OperationCanceledException ex)
+                {
+                    _logger.LogInformation("Background file writer is shutting down...");
                 }
                 catch (Exception ex)
                 {

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,88 +13,83 @@ namespace BigFilesGenerator.Startup
 {
     public class StartupService : IHostedService
     {
+        private readonly IHostApplicationLifetime _appLifetime;
         private readonly ILogger<StartupService> _logger;
-        private readonly GeneratorOptions _generateOptions;
+        private readonly GeneratorOptions _options;
         private readonly IFileGenerator _fileGenerator;
-        private readonly FileWriter _fileWriter;
-        static readonly CancellationTokenSource s_cts = new CancellationTokenSource();
 
-        public StartupService(ILogger<StartupService> logger, IOptions<GeneratorOptions> generateOptions
-            , IFileGenerator fileGenerator, FileWriter fileWriter)
+        public StartupService(IHostApplicationLifetime appLifetime, 
+            ILogger<StartupService> logger, 
+            IOptions<GeneratorOptions> options, 
+            IFileGenerator fileGenerator)
         {
-            _logger = logger;
-            _generateOptions = generateOptions.Value;
-            _fileGenerator = fileGenerator;
-            _fileWriter = fileWriter;
+            _appLifetime = appLifetime ?? throw new ArgumentNullException(nameof(appLifetime));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            _fileGenerator = fileGenerator ?? throw new ArgumentNullException(nameof(fileGenerator));
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            _appLifetime.ApplicationStarted.Register(() =>
+            {
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        if (cancellationToken.IsCancellationRequested)
+                            return;
+
+                        _logger.LogInformation("Application started.");
+                        await IoService.RecreateDirectory(_options.DestinationDirectory, _logger);
+                        await IoService.RecreateDirectory(_options.ResultDirectory, _logger);
+
+                        var expectedFileSize = GetExpectedFileSize();
+                        await Run(expectedFileSize, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Unhandled exception!");
+                    }
+                    finally
+                    {
+                        // Stop the application once the work is done
+                        _appLifetime.StopApplication();
+                    }
+                });
+            });
+
+            return Task.CompletedTask;
+        }
+
+        private async Task Run(byte expectedFileSize, CancellationToken cancellationToken)
+        {
+            var stopWatch = new Stopwatch();
+            stopWatch.Start();
+            await _fileGenerator.Generate(expectedFileSize, cancellationToken);
+            stopWatch.Stop();
+            Console.WriteLine($"Elapsed time: {stopWatch.Elapsed.TotalSeconds}");
+            Console.WriteLine($"Generation finished");
+            Console.ReadLine();
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
-        }
-
-        public async Task Run()
-        {
-            _logger.LogInformation("Application started.");
-            await IOService.RecreateDirectory(_generateOptions.DestinationDirectory, _logger);
-            await IOService.RecreateDirectory(_generateOptions.ResultDirectory, _logger);
-
-            var expectedFileSize = GetExpectedFileSize();
-            var cancelTask = GetCancelTask();
-
-            await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
-            //await Task.WhenAny(cancelTask, _fileGenerator.Merge(s_cts.Token));
-            //await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
-            //await Generate(expectedFileSize, cancelTask);
-            //await GenerateChunks(expectedFileSize, cancelTask);
-        }
-
-        private Task GetCancelTask()
-        {
-            Console.WriteLine("Press the ENTER key to cancel...\n");
-            return Task.Run(() =>
-            {
-                while (Console.ReadKey().Key != ConsoleKey.Enter)
-                {
-                    Console.WriteLine("Press the ENTER key to cancel...");
-                }
-
-                Console.WriteLine("\nENTER key pressed: cancelling operations...\n");
-                s_cts.Cancel();
-            });
+            return Task.CompletedTask;
         }
 
         private byte GetExpectedFileSize()
         {
-            Console.WriteLine($"\nProvide approximate file size you want to be generated in GB (1-{_generateOptions.MaxFileSizeInGb} GB) -- 1 GB by default: ");
+            Console.WriteLine($"\nProvide approximate file size you want to be generated in GB (1-{_options.MaxFileSizeInGb} GB) -- 1 GB by default: ");
             var expectedFileSizeInput = Console.ReadLine();
 
             if (!byte.TryParse(expectedFileSizeInput, out byte expectedFileSize))
                 expectedFileSize = 1;
 
-            if (expectedFileSize > _generateOptions.MaxFileSizeInGb)
-                throw new InvalidDataException($"Incorrect file size. It should be in range 1-{_generateOptions.MaxFileSizeInGb} GB");
+            if (expectedFileSize > _options.MaxFileSizeInGb)
+                throw new InvalidDataException($"Incorrect file size. It should be in range 1-{_options.MaxFileSizeInGb} GB");
 
             return expectedFileSize;
-        }
-
-        private async Task Generate(byte expectedFileSize, Task cancelTask)
-        {
-            _fileWriter.Run(s_cts.Token);
-            await Task.WhenAny(cancelTask, _fileGenerator.Generate(expectedFileSize, s_cts.Token));
-            Console.WriteLine($"Data generation finished, wait for saving file...");
-            //await _fileWriter.Stop();
-        }
-
-        private async Task GenerateChunks(byte expectedFileSize, Task cancelTask)
-        {
-            await Task.WhenAny(cancelTask, _fileGenerator.GenerateChunks(expectedFileSize, s_cts.Token));
-            Console.WriteLine($"Data generation finished.");
         }
     }
 }
