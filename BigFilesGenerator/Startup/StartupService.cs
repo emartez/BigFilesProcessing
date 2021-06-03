@@ -29,7 +29,7 @@ namespace BigFilesGenerator.Startup
             _fileGenerator = fileGenerator ?? throw new ArgumentNullException(nameof(fileGenerator));
         }
 
-        public Task StartAsync(CancellationToken cancellationToken)
+        public async Task StartAsync(CancellationToken cancellationToken)
         {
             _appLifetime.ApplicationStarted.Register(() =>
             {
@@ -59,7 +59,7 @@ namespace BigFilesGenerator.Startup
                 });
             });
 
-            return Task.CompletedTask;
+            return;
         }
 
         private async Task Run(byte expectedFileSize, CancellationToken cancellationToken)

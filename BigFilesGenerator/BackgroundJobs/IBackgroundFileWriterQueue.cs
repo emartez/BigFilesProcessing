@@ -19,5 +19,7 @@ namespace BigFilesGenerator.BackgroundJobs
         int GetQueueLength();
         bool IsProcessing();
         void SetProcessing(bool isProcessing);
+        bool TryDequeue(out StringBuilder result);
+        bool IsEmpty();
     }
 }

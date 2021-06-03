@@ -3,7 +3,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,40 +24,49 @@ namespace BigFilesGenerator.BackgroundJobs
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         }
 
-        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+        protected override Task ExecuteAsync(CancellationToken cancellationToken)
         {
+            _ = Task.Run(async () =>
+              {
+                  await DoWork(cancellationToken);
+              }, cancellationToken);
+
+            return Task.CompletedTask;
+        }
+
+        private async Task DoWork(CancellationToken cancellationToken)
+        {
+            var outputFileName = Path.Combine(_options.ResultDirectory, _options.ResultFileName);
+
             // Dequeue and execute texts until the application is stopped
             while (!cancellationToken.IsCancellationRequested)
             {
-                // Get next queue position
-                // This blocks until a queue position becomes available
-                _writerQueue.SetProcessing(true);
+                if (_writerQueue.IsEmpty())
+                {
+                    await Task.Delay(100, cancellationToken);
+                    continue;
+                }
+
                 try
                 {
-                    var outputFileName = _options.GenerateChunksThenMerge
-                        ? Path.Combine(_options.DestinationDirectory, $"{Guid.NewGuid()}.txt")
-                        : Path.Combine(_options.ResultDirectory, _options.ResultFileName);
 
-                    var iterations = 0;
-                    using (StreamWriter writer = new StreamWriter(outputFileName,true))
+                    if (_options.GenerateChunksThenMerge)
+                        outputFileName = Path.Combine(_options.DestinationDirectory, $"{Guid.NewGuid()}.txt");
+
+                    using (StreamWriter writer = new StreamWriter(outputFileName, true))
                     {
-                        while (!cancellationToken.IsCancellationRequested)
+                        for (int i = 0; i < _options.WriterGenerationLoopLimit && _writerQueue.TryDequeue(out StringBuilder text); i++)
                         {
-                            if (iterations >= _options.WriterGenerationLoopLimit) 
-                                break;
-
-                            var text = await _writerQueue.DequeueAsync(cancellationToken);
                             await writer.WriteAsync(text, cancellationToken);
-                            iterations++;
                         }
 
                         await writer.FlushAsync();
                         writer.Close();
                     }
 
-                    _writerQueue.SetProcessing(false);
+                    await Task.Delay(100, cancellationToken);
                 }
-                catch(OperationCanceledException ex)
+                catch (OperationCanceledException ex)
                 {
                     _logger.LogInformation("Background file writer is shutting down...");
                 }

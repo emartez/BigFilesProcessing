@@ -13,7 +13,7 @@ namespace BigFilesGenerator.BackgroundJobs
         private readonly ConcurrentQueue<StringBuilder> _items = new();
 
         // Holds the current count of texts in the queue.
-        //private readonly SemaphoreSlim _signal = new SemaphoreSlim(0);
+        private readonly SemaphoreSlim _signal = new SemaphoreSlim(0);
         private long _totalSize = 0;
 
         public void EnqueueText(StringBuilder text)
@@ -23,16 +23,26 @@ namespace BigFilesGenerator.BackgroundJobs
 
             _totalSize += text.Length;
             _items.Enqueue(text);
-            //_signal.Release(10);
+            _signal.Release(10);
         }
 
         public async Task<StringBuilder> DequeueAsync(CancellationToken cancellationToken)
         {
             // Wait for task to become available
-            //await _signal.WaitAsync(cancellationToken);
+            await _signal.WaitAsync(cancellationToken);
 
             _items.TryDequeue(out var text);
             return text;
+        }
+
+        public bool TryDequeue(out StringBuilder result)
+        {
+            return _items.TryDequeue(out result);
+        }
+
+        public bool IsEmpty()
+        {
+            return _items.IsEmpty;
         }
 
         public float GetTotalSizeInGb()

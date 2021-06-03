@@ -32,8 +32,8 @@ namespace BigFilesGenerator.Startup
 
                         services.Configure<GeneratorOptions>(configuration.GetSection(GeneratorOptions.Generator));
                         services.AddSingleton<IBackgroundFileWriterQueue, BackgroundFileWriterQueue>();
-                        services.AddHostedService<BackgroundHostedFileWriter>();
                         services.AddHostedService<StartupService>();
+                        services.AddHostedService<BackgroundHostedFileWriter>();
                     })
                     .ConfigureLogging(logging =>
                     {

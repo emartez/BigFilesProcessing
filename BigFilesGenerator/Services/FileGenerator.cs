@@ -37,25 +37,30 @@ namespace BigFilesGenerator.Services
             if (cancellationToken.IsCancellationRequested)
                 return;
 
+            float lastTotalSizeInGb = 0;
             while (totalSizeInGb < maxFileSizeInGb && iteration < _options.SchedullerIterationLimit && !cancellationToken.IsCancellationRequested)
             {
                 List<Task> tasks = CreateNewTasks(cancellationToken);
 
                 await Task.Run(() => Task.WhenAll(tasks), cancellationToken);
 
-                totalSizeInGb = _options.GenerateChunksThenMerge
-                    ? new DirectoryInfo(_options.DestinationDirectory).EnumerateFiles().Sum(file => file.Length) / 1000f / 1000f / 1000f
-                    : _writerQueue.GetTotalSizeInGb();
+                totalSizeInGb = _writerQueue.GetTotalSizeInGb();
 
-                var totalSizePercentage = totalSizeInGb / maxFileSizeInGb * 100; //%
-                Console.WriteLine($"Total size of result file is {totalSizeInGb:0.00}[GB] ({totalSizePercentage:0.00}%)");
+                if (lastTotalSizeInGb != totalSizeInGb)
+                {
+                    var totalSizePercentage = totalSizeInGb / maxFileSizeInGb * 100; //%
+                    Console.Write($"\nTotal size of result file is {totalSizeInGb:0.000}[GB] ({totalSizePercentage:0.00}%)");
+                } else
+                {
+                    Console.Write('.');
+                }
 
                 while (_writerQueue.GetQueueLength() >= _options.AllowedQueuedLength)
                 {
-                    await Task.Delay(1000, cancellationToken);
+                    await Task.Delay(100, cancellationToken);
                 }
 
-                await Task.Delay(100, cancellationToken);
+                lastTotalSizeInGb = totalSizeInGb;
                 iteration++;
             };
 
@@ -64,15 +69,18 @@ namespace BigFilesGenerator.Services
         
         private async Task FinalizeGeneration(CancellationToken cancellationToken)
         {
-            while (_writerQueue.IsProcessing())
+            while (!_writerQueue.IsEmpty())
             {
-                Console.WriteLine("File is still generated....");
+                Console.WriteLine("\nFile is still generated....");
                 await Task.Delay(500, cancellationToken);
             }
 
-            Console.WriteLine("Generation completed");
+            Console.WriteLine("\nGeneration completed");
             if (_options.GenerateChunksThenMerge)
+            {
+                Console.WriteLine("Merging chunks...");
                 await Merge(cancellationToken);
+            }
         }
 
         private async Task Merge(CancellationToken cancellationToken)
@@ -86,7 +94,7 @@ namespace BigFilesGenerator.Services
             {
                 using (StreamWriter writer = new StreamWriter(resultFile))
                 {
-                    for (int i = 0; i < _options.FilesMergedAtOnce; i++)
+                    for (int i = 0; i < _options.FilesMergedAtOnce && mergedFilesNumber < txtFiles.Length; i++)
                     {
                         mergedFilesNumber++;
                         using (StreamReader reader = File.OpenText(txtFiles[i]))
