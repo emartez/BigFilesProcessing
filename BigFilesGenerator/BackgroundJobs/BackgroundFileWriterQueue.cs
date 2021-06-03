@@ -9,13 +9,12 @@ namespace BigFilesGenerator.BackgroundJobs
 {
     public class BackgroundFileWriterQueue : IBackgroundFileWriterQueue
     {
+        private bool _isProcessing;
         private readonly ConcurrentQueue<StringBuilder> _items = new();
-        private readonly ConcurrentQueue<Guid> _requests = new();
 
         // Holds the current count of texts in the queue.
-        private readonly SemaphoreSlim _signal = new SemaphoreSlim(0);
+        //private readonly SemaphoreSlim _signal = new SemaphoreSlim(0);
         private long _totalSize = 0;
-        internal float CurrentWriteQueueLength => _items.Count;
 
         public void EnqueueText(StringBuilder text)
         {
@@ -24,14 +23,13 @@ namespace BigFilesGenerator.BackgroundJobs
 
             _totalSize += text.Length;
             _items.Enqueue(text);
-            _requests.Enqueue(Guid.NewGuid());
-            _signal.Release();
+            //_signal.Release(10);
         }
 
         public async Task<StringBuilder> DequeueAsync(CancellationToken cancellationToken)
         {
             // Wait for task to become available
-            await _signal.WaitAsync(cancellationToken);
+            //await _signal.WaitAsync(cancellationToken);
 
             _items.TryDequeue(out var text);
             return text;
@@ -47,9 +45,13 @@ namespace BigFilesGenerator.BackgroundJobs
             return _items.Count();
         }
 
-        public int GetNotFinishedRequest()
+        public void SetProcessing(bool isProcessing) {
+            _isProcessing = isProcessing;
+        }
+
+        public bool IsProcessing()
         {
-            return _requests.Count();
+            return _isProcessing || !_items.IsEmpty;
         }
     }
 }

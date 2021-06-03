@@ -29,8 +29,7 @@ namespace BigFilesGenerator.BackgroundJobs
             {
                 // Get next queue position
                 // This blocks until a queue position becomes available
-                var text = await _writerQueue.DequeueAsync(cancellationToken);
-
+                _writerQueue.SetProcessing(true);
                 try
                 {
                     var outputFileName = _options.GenerateChunksThenMerge
@@ -38,22 +37,23 @@ namespace BigFilesGenerator.BackgroundJobs
                         : Path.Combine(_options.ResultDirectory, _options.ResultFileName);
 
                     var iterations = 0;
-                    using (StreamWriter writer = File.AppendText(outputFileName))
+                    using (StreamWriter writer = new StreamWriter(outputFileName,true))
                     {
                         while (!cancellationToken.IsCancellationRequested)
                         {
                             if (iterations >= _options.WriterGenerationLoopLimit) 
                                 break;
 
-                            await writer.WriteAsync(text);
-                            text = await _writerQueue.DequeueAsync(cancellationToken);
+                            var text = await _writerQueue.DequeueAsync(cancellationToken);
+                            await writer.WriteAsync(text, cancellationToken);
                             iterations++;
                         }
 
                         await writer.FlushAsync();
                         writer.Close();
                     }
-                    await Task.Delay(100, cancellationToken);
+
+                    _writerQueue.SetProcessing(false);
                 }
                 catch(OperationCanceledException ex)
                 {

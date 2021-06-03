@@ -61,15 +61,16 @@ namespace BigFilesGenerator.Services
 
             await FinalizeGeneration(cancellationToken);
         }
-
+        
         private async Task FinalizeGeneration(CancellationToken cancellationToken)
         {
-            while (_writerQueue.GetNotFinishedRequest() > 0)
+            while (_writerQueue.IsProcessing())
             {
                 Console.WriteLine("File is still generated....");
                 await Task.Delay(500, cancellationToken);
             }
 
+            Console.WriteLine("Generation completed");
             if (_options.GenerateChunksThenMerge)
                 await Merge(cancellationToken);
         }

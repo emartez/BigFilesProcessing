@@ -1,5 +1,4 @@
-﻿using System;
-using System.Text;
+﻿using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -18,7 +17,7 @@ namespace BigFilesGenerator.BackgroundJobs
 
         // Returns queue length
         int GetQueueLength();
-        int GetNotFinishedRequest();
-        //Task<Guid> DequeueRequest(CancellationToken cancellationToken);
+        bool IsProcessing();
+        void SetProcessing(bool isProcessing);
     }
 }
