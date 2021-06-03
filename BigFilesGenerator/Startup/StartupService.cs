@@ -42,7 +42,7 @@ namespace BigFilesGenerator.Startup
 
                         _logger.LogInformation("Application started.");
                         await IoService.RecreateDirectory(_options.DestinationDirectory, _logger);
-                        await IoService.RecreateDirectory(_options.ResultDirectory, _logger);
+                        //await IoService.RecreateDirectory(_options.ResultDirectory, _logger);
 
                         var expectedFileSize = GetExpectedFileSize();
                         await Run(expectedFileSize, cancellationToken);
@@ -84,10 +84,7 @@ namespace BigFilesGenerator.Startup
             Console.WriteLine($"\nProvide approximate file size you want to be generated in GB (1-{_options.MaxFileSizeInGb} GB) -- 1 GB by default: ");
             var expectedFileSizeInput = Console.ReadLine();
 
-            if (!byte.TryParse(expectedFileSizeInput, out byte expectedFileSize))
-                expectedFileSize = 1;
-
-            if (expectedFileSize > _options.MaxFileSizeInGb)
+            if (!byte.TryParse(expectedFileSizeInput, out byte expectedFileSize) && expectedFileSize > _options.MaxFileSizeInGb || expectedFileSize < 1)
                 throw new InvalidDataException($"Incorrect file size. It should be in range 1-{_options.MaxFileSizeInGb} GB");
 
             return expectedFileSize;

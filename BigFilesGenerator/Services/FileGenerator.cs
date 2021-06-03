@@ -65,7 +65,41 @@ namespace BigFilesGenerator.Services
 
             await FinalizeGeneration(cancellationToken);
         }
-        
+
+        public async Task SimpleGenerateAsync(byte maxFileSizeInGb, CancellationToken cancellationToken)
+        {
+            var fileName = "sentences.txt";
+
+            var size = 0;
+            var oldSize = 0;
+            string text = "";
+
+            using (StreamReader sr = new StreamReader(fileName))
+            {
+                text = await sr.ReadToEndAsync();
+                sr.Close();
+            }
+
+            using (StreamWriter writer = new StreamWriter(Path.Combine(_options.ResultDirectory, "dat.txt"), true))
+            {
+                while (size < maxFileSizeInGb * 1000 * 1000 * 1000 && !cancellationToken.IsCancellationRequested)
+                {
+                    await writer.WriteAsync(text);
+                    size += text.Length;
+
+                    if (size - oldSize > 100 * 1000 * 1000)
+                    {
+                        oldSize = size;
+                        Console.WriteLine($"\nTotal size of result file is {size / 1000f / 1000f / 1000f:0.000}[GB]");
+                    }
+                }
+
+                await Task.Delay(100, cancellationToken);
+                await writer.FlushAsync();
+                writer.Close();
+            }
+        }
+
         private async Task FinalizeGeneration(CancellationToken cancellationToken)
         {
             while (!_writerQueue.IsEmpty())
@@ -89,7 +123,7 @@ namespace BigFilesGenerator.Services
             txtFiles = Directory.GetFiles(_options.DestinationDirectory, "*.txt");
             var resultFile = Path.Combine(_options.ResultDirectory, _options.ResultFileName);
 
-            while (!cancellationToken.IsCancellationRequested && mergedFilesNumber < txtFiles.Length)
+            while (!cancellationToken.IsCancellationRequested && txtFiles.Length > 0 && mergedFilesNumber < txtFiles.Length)
             {
                 using (StreamWriter writer = new StreamWriter(resultFile))
                 {

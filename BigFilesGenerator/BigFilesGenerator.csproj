@@ -8,11 +8,15 @@
   <ItemGroup>
     <None Remove="Resources\Sentences.txt" />
     <None Remove="Resources\words.txt" />
+    <None Remove="Sentences.txt" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\Sentences.txt" />
     <EmbeddedResource Include="Resources\Words.txt" />
+    <Content Include="Sentences.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
