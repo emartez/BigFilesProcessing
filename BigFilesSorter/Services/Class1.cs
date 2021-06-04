@@ -9,38 +9,48 @@ namespace BigFilesSorter.Services
 {
     public class Class1
     {
+        public static async Task Display(string file)
+        {
+            using (StreamReader sr = new StreamReader(file))
+            {
+                while (sr.Peek() >= 0)
+                {
+                    // Copy a line
+                    Console.WriteLine(await sr.ReadLineAsync());
+                }
+            }
+        }
+
         public static async Task Split(string file)
         {
             int split_num = 1;
-            //StreamWriter sw = new StreamWriter(
-            //  string.Format("e:\\data\\generated\\split{0:d5}.dat", split_num));
+            StreamWriter sw = new StreamWriter(
+              string.Format("e:\\data\\generated\\split{0:d5}.dat", split_num));
             long read_line = 0;
             using (StreamReader sr = new StreamReader(file))
             {
                 while (sr.Peek() >= 0)
                 {
-                    //// Progress reporting
-                    //if (++read_line % 5000 == 0)
-                    //    Console.Write("{0:f2}%   \r",
-                    //      100.0 * sr.BaseStream.Position / sr.BaseStream.Length);
+                    // Progress reporting
+                    if (++read_line % 5000 == 0)
+                        Console.Write("{0:f2}%   \r",
+                          100.0 * sr.BaseStream.Position / sr.BaseStream.Length);
 
                     // Copy a line
-                    var line = await sr.ReadLineAsync();
-                    //await sw.WriteLineAsync(line);
+                    await sw.WriteLineAsync(await sr.ReadLineAsync());
 
                     // If the file is big, then make a new split,
                     // however if this was the last line then don't bother
-                    //if (sw.BaseStream.Length > 100000000 && sr.Peek() >= 0)
-                    //{
-                    //    sw.Close();
-                    //    split_num++;
-                    //    sw = new StreamWriter(
-                    //      string.Format("e:\\data\\generated\\split{0:d5}.dat", split_num));
-                    //}
+                    if (sw.BaseStream.Length > 100000000 && sr.Peek() >= 0)
+                    {
+                        sw.Close();
+                        split_num++;
+                        sw = new StreamWriter(
+                          string.Format("e:\\data\\generated\\split{0:d5}.dat", split_num));
+                    }
                 }
             }
-            Console.WriteLine("Finish");
-            //sw.Close();
+            sw.Close();
         }
 
         static void SortTheChunks()

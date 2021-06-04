@@ -29,39 +29,13 @@ namespace BigFilesSorter.Services
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         }
 
-        static readonly IComparer<byte[]> _comparer = Comparer<byte[]>.Create((byte[] firstLine, byte[] secondLine) => {
-            var chr = '.';
-            var index1 = Array.IndexOf(firstLine, (byte)chr);
-            var index2 = Array.IndexOf(secondLine, (byte)chr);
+        static readonly IComparer<byte[]> _comparer = Comparer<byte[]>.Create(
+            (byte[] firstLine, byte[] secondLine) => Comparer(firstLine, secondLine)
+        );
 
-            if (index1 < 0)
-                return 1;
-
-            if (index2 < 0)
-                return -1;
-
-            var firstTextId = new byte[index1];
-            Array.Copy(firstLine, firstTextId, index1);
-
-            var secondTextId = new byte[index2];
-            Array.Copy(secondLine, secondTextId, index2);
-
-            var firstText = new byte[firstLine.Length - 1 - index1];
-            Array.Copy(firstLine, index1 + 1, firstText, 0, firstLine.Length - 1 - index1);
-
-            var secondText = new byte[secondLine.Length - 1 - index2];
-            Array.Copy(secondLine, index2 + 1, secondText, 0, secondLine.Length - 1 - index2);
-
-            return
-                (memcmp(firstText, secondText, firstText.Length) < 0
-                || firstTextId.Length < secondTextId.Length
-                || firstTextId.Length == secondTextId.Length && memcmp(firstTextId, secondTextId, firstText.Length) < 0)
-                    ? -1
-                    : 1;
-        });
-
-        static int Comparer(ref byte[] firstLine, ref byte[] secondLine)
+        static int Comparer(byte[] firstLine, byte[] secondLine)
         {
+            return memcmp(firstLine, secondLine, firstLine.Length);
             var chr = '.';
             var index1 = Array.IndexOf(firstLine, (byte)chr);
             var index2 = Array.IndexOf(secondLine, (byte)chr);
@@ -96,7 +70,7 @@ namespace BigFilesSorter.Services
         {
             var testStringArray = Encoding.UTF8.GetBytes("11456. ahats slepa kura");
             var testString2Array = Encoding.UTF8.GetBytes("1123. chats slepa kura");
-            var result = Comparer(ref testStringArray, ref testString2Array);
+            var result = Comparer(testStringArray, testString2Array);
 
 
 
@@ -133,11 +107,13 @@ namespace BigFilesSorter.Services
             //    numBytesToRead = bytes.Length;
             //}
 
-            //await Class1.Split(filePath);
+            //await Class1.Display(destinationFilePath);
+
             long offset = 0x00000000; // 256 megabytes
             long length = 0x20000000; // 512 megabytes
             var chr = (byte)'\n';
-            using (var destMmf = MemoryMappedFile.CreateFromFile(destinationFilePath, FileMode.CreateNew, "dataProcessed", 50000))
+
+            using (var destMmf = MemoryMappedFile.CreateFromFile(destinationFilePath, FileMode.CreateNew, "dataProcessed", fileSize))
             {
                 using (var destAccessor = destMmf.CreateViewAccessor()) 
                 {
@@ -145,30 +121,42 @@ namespace BigFilesSorter.Services
                     {
                         using (var sourcAccessor = sourceMmf.CreateViewAccessor(offset, length))
                         {
-                            var sentenceToCmp = Encoding.UTF8.GetBytes("ktyroi");
-
+                            byte[] sentence = new byte[10000];
+                            int sentenceSize = 10000;
                             // Make changes to the view.
-                            for (long i = 0; i < 1; i += 2)
+                            for (long i = 0, endIndex = 0; i < length; i += endIndex + 1)
                             {
-                                byte[] sentence = new byte[50000];
-                                sourcAccessor.ReadArray(i, sentence, 0, 50000);
+                                //Console.WriteLine(i);
+                                if (fileSize - i < 10000)
+                                {
+                                    sentenceSize = (int)(fileSize - i);
+                                    sentence = new byte[sentenceSize];
+                                }
 
-                                var endIndex = Array.LastIndexOf(sentence, chr);
+                                sourcAccessor.ReadArray(i, sentence, 0, sentenceSize);
 
-                                var lineBreaks = Enumerable.Range(0, sentence.Length).Where(i => sentence[i] == chr).ToArray();
+                                var lineBreaks = Enumerable.Range(0, sentence.Length).Where(idx => sentence[idx] == chr).ToArray();
+                                if (!lineBreaks.Any())
+                                    break;
+
+                                endIndex = lineBreaks.Last();
                                 var sortedSentences = new byte[lineBreaks.Length][];
 
                                 for (int j = 0, startIndex = 0; j < lineBreaks.Length; j++)
                                 {
                                     sortedSentences[j] = new byte[lineBreaks[j] - startIndex];
-                                    Array.Copy(sentence, j, sortedSentences[j], 0, lineBreaks[j] - startIndex);
+                                    Array.Copy(sentence, startIndex + 1, sortedSentences[j], 0, lineBreaks[j] - startIndex);
+
+                                    //Console.WriteLine($"Sentence: {Encoding.UTF8.GetString(sortedSentences[j])}");
+
                                     startIndex = lineBreaks[j];
                                 }
 
-                                Array.Sort(sortedSentences, )
+                                Array.Sort(sortedSentences, _comparer);
 
                                 //sentence = Encoding.Default.GetBytes("0000. testowa linijka linijk linijk linijk");
-                                destAccessor.WriteArray(i, sentence, 0, sentence.Length);
+                                var sortedSentencesArray = sortedSentences.SelectMany(s => s).ToArray();
+                                destAccessor.WriteArray(i, sortedSentencesArray, 0, sortedSentencesArray.Length);
                             }
                         }
                     } 
