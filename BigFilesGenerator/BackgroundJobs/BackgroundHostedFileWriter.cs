@@ -3,7 +3,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -15,21 +14,30 @@ namespace BigFilesGenerator.BackgroundJobs
     {
         private readonly IBackgroundFileWriterQueue _writerQueue;
         private readonly ILogger<BackgroundHostedFileWriter> _logger;
+        private readonly IHostApplicationLifetime _appLifetime;
         private readonly SorterOptions _options;
 
-        public BackgroundHostedFileWriter(IBackgroundFileWriterQueue writerQueue, ILogger<BackgroundHostedFileWriter> logger, IOptions<SorterOptions> options)
+        public BackgroundHostedFileWriter(
+            IBackgroundFileWriterQueue writerQueue, 
+            ILogger<BackgroundHostedFileWriter> logger, 
+            IOptions<SorterOptions> options,
+            IHostApplicationLifetime appLifetime)
         {
             _writerQueue = writerQueue ?? throw new ArgumentNullException(nameof(writerQueue));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _appLifetime = appLifetime;
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         }
 
         protected override Task ExecuteAsync(CancellationToken cancellationToken)
         {
-            _ = Task.Run(async () =>
-              {
-                  await DoWork(cancellationToken);
-              }, cancellationToken);
+            _appLifetime.ApplicationStarted.Register(() =>
+            {
+                Task.Run(async () =>
+                  {
+                      await DoWork(cancellationToken);
+                  }, cancellationToken);
+            });
 
             return Task.CompletedTask;
         }

@@ -29,7 +29,7 @@ namespace BigFilesGenerator.Startup
             _fileGenerator = fileGenerator ?? throw new ArgumentNullException(nameof(fileGenerator));
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken)
+        public Task StartAsync(CancellationToken cancellationToken)
         {
             _appLifetime.ApplicationStarted.Register(() =>
             {
@@ -42,7 +42,7 @@ namespace BigFilesGenerator.Startup
 
                         _logger.LogInformation("Application started.");
                         await IoService.RecreateDirectory(_options.DestinationDirectory, _logger);
-                        //await IoService.RecreateDirectory(_options.ResultDirectory, _logger);
+                        await IoService.RecreateDirectory(_options.ResultDirectory, _logger);
 
                         var expectedFileSize = GetExpectedFileSize();
                         await Run(expectedFileSize, cancellationToken);
@@ -56,10 +56,10 @@ namespace BigFilesGenerator.Startup
                         // Stop the application once the work is done
                         _appLifetime.StopApplication();
                     }
-                });
+                }, cancellationToken);
             });
 
-            return;
+            return Task.CompletedTask;
         }
 
         private async Task Run(byte expectedFileSize, CancellationToken cancellationToken)
