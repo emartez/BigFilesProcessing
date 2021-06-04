@@ -111,7 +111,9 @@ namespace BigFilesSorter.Services
 
             long offset = 0x00000000; // 256 megabytes
             long length = 0x20000000; // 512 megabytes
-            var chr = (byte)'\n';
+            var newLineByte = (byte)'\n';
+
+            var chunkEndIndexes = GetChunkData(fileSize, newLineByte);
 
             using (var destMmf = MemoryMappedFile.CreateFromFile(destinationFilePath, FileMode.CreateNew, "dataProcessed", fileSize))
             {
@@ -121,13 +123,13 @@ namespace BigFilesSorter.Services
                     {
                         using (var sourcAccessor = sourceMmf.CreateViewAccessor(offset, length))
                         {
-                            byte[] sentence = new byte[10000];
-                            int sentenceSize = 10000;
+                            byte[] sentence = new byte[100000];
+                            int sentenceSize = 100000;
                             // Make changes to the view.
                             for (long i = 0, endIndex = 0; i < length; i += endIndex + 1)
                             {
                                 //Console.WriteLine(i);
-                                if (fileSize - i < 10000)
+                                if (fileSize - i < 100000)
                                 {
                                     sentenceSize = (int)(fileSize - i);
                                     sentence = new byte[sentenceSize];
@@ -135,7 +137,7 @@ namespace BigFilesSorter.Services
 
                                 sourcAccessor.ReadArray(i, sentence, 0, sentenceSize);
 
-                                var lineBreaks = Enumerable.Range(0, sentence.Length).Where(idx => sentence[idx] == chr).ToArray();
+                                var lineBreaks = Enumerable.Range(0, sentence.Length).Where(idx => sentence[idx] == newLineByte).ToArray();
                                 if (!lineBreaks.Any())
                                     break;
 
@@ -163,6 +165,47 @@ namespace BigFilesSorter.Services
                 }
             }
 
+        }
+
+        private long[] GetChunkData(long fileSize, byte newLineByte)
+        {
+            var filePath = Path.Combine(_options.SourceDirectory, _options.SourceFileName);
+            long approximateChunkSize = 0x20000000; // 512 megabytes
+            int approximateLineLength = 100;
+            var noOfChunks = (int)(fileSize / approximateChunkSize);
+
+            if (noOfChunks * approximateChunkSize < fileSize)
+                noOfChunks++;
+
+            using (var sourceMmf = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, "dataProcessing"))
+            {
+                long[] chunkEndIndexes = new long[noOfChunks];
+                long offset = 0;
+                for (int i = 0; i < noOfChunks; i++)
+                {
+                    using (var sourcAccessor = sourceMmf.CreateViewAccessor(offset, approximateLineLength*2))
+                    {
+                        byte[] searchBytes = new byte[200];
+                        sourcAccessor.ReadArray(0, searchBytes, 0, 200);
+                        var newLineIndex = Array.IndexOf(searchBytes, newLineByte);
+
+                        if (newLineIndex < 0)
+                            _logger.LogError("File structure is not correct");
+
+                        chunkEndIndexes[i] = offset + newLineIndex;
+
+                        if (offset + approximateChunkSize > fileSize)
+                        {
+                            chunkEndIndexes[i] = fileSize - 1;
+                            break;
+                        }
+
+                        offset += approximateChunkSize;
+                    }
+                }
+
+                return chunkEndIndexes;
+            };
         }
     }
 }
