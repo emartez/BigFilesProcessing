@@ -2,7 +2,7 @@
 using System.IO;
 using System.Threading.Tasks;
 
-namespace BigFilesGenerator.Services
+namespace BigFilesSorter.Services
 {
     internal class IoService
     {
