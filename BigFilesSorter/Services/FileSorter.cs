@@ -107,80 +107,93 @@ namespace BigFilesSorter.Services
             //    numBytesToRead = bytes.Length;
             //}
 
-            //await Class1.Display(destinationFilePath);
+            await Class1.Split(sourceFilePath);
 
             long offset = 0x00000000; // 256 megabytes
             long length = 0x20000000; // 512 megabytes
             var newLineByte = (byte)'\n';
 
-            var chunkEndIndexes = GetChunkData(fileSize, newLineByte);
-
-            using (var destMmf = MemoryMappedFile.CreateFromFile(destinationFilePath, FileMode.CreateNew, "dataProcessed", fileSize))
-            {
-                using (var destAccessor = destMmf.CreateViewAccessor()) 
-                {
-                    using (var sourceMmf = MemoryMappedFile.CreateFromFile(sourceFilePath, FileMode.Open, "dataProcessing"))
-                    {
-                        using (var sourcAccessor = sourceMmf.CreateViewAccessor(offset, length))
-                        {
-                            byte[] sentence = new byte[100000];
-                            int sentenceSize = 100000;
-                            // Make changes to the view.
-                            for (long i = 0, endIndex = 0; i < length; i += endIndex + 1)
-                            {
-                                //Console.WriteLine(i);
-                                if (fileSize - i < 100000)
-                                {
-                                    sentenceSize = (int)(fileSize - i);
-                                    sentence = new byte[sentenceSize];
-                                }
-
-                                sourcAccessor.ReadArray(i, sentence, 0, sentenceSize);
-
-                                var lineBreaks = Enumerable.Range(0, sentence.Length).Where(idx => sentence[idx] == newLineByte).ToArray();
-                                if (!lineBreaks.Any())
-                                    break;
-
-                                endIndex = lineBreaks.Last();
-                                var sortedSentences = new byte[lineBreaks.Length][];
-
-                                for (int j = 0, startIndex = 0; j < lineBreaks.Length; j++)
-                                {
-                                    sortedSentences[j] = new byte[lineBreaks[j] - startIndex];
-                                    Array.Copy(sentence, startIndex + 1, sortedSentences[j], 0, lineBreaks[j] - startIndex);
-
-                                    //Console.WriteLine($"Sentence: {Encoding.UTF8.GetString(sortedSentences[j])}");
-
-                                    startIndex = lineBreaks[j];
-                                }
-
-                                Array.Sort(sortedSentences, _comparer);
-
-                                //sentence = Encoding.Default.GetBytes("0000. testowa linijka linijk linijk linijk");
-                                var sortedSentencesArray = sortedSentences.SelectMany(s => s).ToArray();
-                                destAccessor.WriteArray(i, sortedSentencesArray, 0, sortedSentencesArray.Length);
-                            }
-                        }
-                    } 
-                }
-            }
-
+            //var chunkData = GetChunkData(fileSize, newLineByte);
+            //await SortChunks(chunkData, fileSize, cancellationToken);
         }
 
-        private long[] GetChunkData(long fileSize, byte newLineByte)
+        private async Task SortChunks(Dictionary<long, int> chunkData, long fileSize, CancellationToken cancellationToken)
+        {
+            var parralelTasksAllowed = 20;
+
+            var sourceFilePath = Path.Combine(_options.SourceDirectory, _options.SourceFileName);
+            var destinationFilePath = Path.Combine(_options.DestinationDirectory, _options.DestinationFileName);
+
+            using var destMmf = MemoryMappedFile.CreateFromFile(destinationFilePath, FileMode.CreateNew, "dataProcessed", fileSize);
+            using (var sourceMmf = MemoryMappedFile.CreateFromFile(sourceFilePath, FileMode.Open, "dataProcessing"))
+            {
+                List<Action> tasks = new();
+                foreach (var chunk in chunkData)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        break;
+
+                    tasks.Add(() => SortChunk(chunk.Key, chunk.Value, fileSize, destMmf, sourceMmf, cancellationToken));
+
+                    if (tasks.Count() >= parralelTasksAllowed)
+                    {
+                        Parallel.Invoke(tasks.ToArray());
+                        tasks = new List<Action>();
+                    }
+                }
+            }
+        }
+
+        private void SortChunk(long offset, int length, long fileSize, MemoryMappedFile destMmf, MemoryMappedFile sourceMmf, CancellationToken cancellationToken)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
+            Console.WriteLine($"Started sorting chunk: from {offset} to {length}");
+            var newLineByte = (byte)'\n';
+
+            using var destAccessor = destMmf.CreateViewAccessor(offset, length);
+            using var sourcAccessor = sourceMmf.CreateViewAccessor(offset, length);
+            {
+                byte[] sentence = new byte[length];
+
+                sourcAccessor.ReadArray(0, sentence, 0, length);
+
+                var lineBreaks = Enumerable.Range(0, sentence.Length).Where(idx => sentence[idx] == newLineByte).ToArray();
+                if (!lineBreaks.Any())
+                    _logger.LogError($"File structure is not correct for offset {offset}");
+
+                var sortedSentences = new byte[lineBreaks.Length][];
+
+                for (int j = 0, startIndex = 0; j < lineBreaks.Length; j++)
+                {
+                    sortedSentences[j] = new byte[lineBreaks[j] - startIndex];
+                    Array.Copy(sentence, startIndex + 1, sortedSentences[j], 0, lineBreaks[j] - startIndex);
+                    startIndex = lineBreaks[j];
+                }
+
+                //Array.Sort(sortedSentences, _comparer);
+
+                //sentence = Encoding.Default.GetBytes("0000. testowa linijka linijk linijk linijk");
+                var sortedSentencesArray = sortedSentences.SelectMany(s => s).ToArray();
+                destAccessor.WriteArray(0, sortedSentencesArray, 0, sortedSentencesArray.Length);
+
+                Console.WriteLine($"Finished sorting chunk: from {offset} to {length}");
+            }
+        }
+
+        private Dictionary<long, int> GetChunkData(long fileSize, byte newLineByte)
         {
             var filePath = Path.Combine(_options.SourceDirectory, _options.SourceFileName);
-            long approximateChunkSize = 0x20000000; // 512 megabytes
+            long approximateChunkSize = 0x2000000; // 512 megabytes
             int approximateLineLength = 100;
             var noOfChunks = (int)(fileSize / approximateChunkSize);
 
-            if (noOfChunks * approximateChunkSize < fileSize)
-                noOfChunks++;
+            long[] chunkEndIndexes = new long[noOfChunks];
 
             using (var sourceMmf = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, "dataProcessing"))
             {
-                long[] chunkEndIndexes = new long[noOfChunks];
-                long offset = 0;
+                long offset = approximateChunkSize;
                 for (int i = 0; i < noOfChunks; i++)
                 {
                     using (var sourcAccessor = sourceMmf.CreateViewAccessor(offset, approximateLineLength*2))
@@ -203,9 +216,19 @@ namespace BigFilesSorter.Services
                         offset += approximateChunkSize;
                     }
                 }
-
-                return chunkEndIndexes;
             };
+
+            var chunkData = new Dictionary<long, int>();
+            long chunkStartPoint = 0;
+
+            for (int i = 0; i < chunkEndIndexes.Length; i++)
+            {
+                var offset = chunkEndIndexes[i];
+                chunkData[chunkStartPoint] = (int)(offset - chunkStartPoint + 1);
+                chunkStartPoint = offset + 1;
+            }
+
+            return chunkData;
         }
     }
 }
