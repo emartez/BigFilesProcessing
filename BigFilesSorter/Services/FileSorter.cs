@@ -46,22 +46,37 @@ namespace BigFilesSorter.Services
             var sourceFilePath = Path.Combine(_options.SourceDirectory, _options.SourceFileName);
             var destinationFilePath = Path.Combine(_options.DestinationDirectory, _options.DestinationFileName);
             var fileSize = new FileInfo(sourceFilePath).Length;
-            var chunkData = GetChunkData(fileSize);
-
             _semaphore.Release(_options.WriterSemaphorAccess);
-            var tasks = new List<Task>();
 
-            var noOfParallelTasks = _options.MaxMemoryUsageMb / _options.ApproximateChunkFileSizeMb / 10;
-            for (int i = 0; i < chunkData.Count / noOfParallelTasks; i++)
+            var tasks = new List<Task>();
+            using (var sourceMmf = MemoryMappedFile.CreateFromFile(sourceFilePath, FileMode.Open, "dataProcessing"))
             {
-                var chunksForTask = chunkData.Skip(i * noOfParallelTasks).Take(noOfParallelTasks).ToDictionary(c => c.Key, c => c.Value);
-                tasks.Add(SortChunks(chunksForTask, fileSize, sourceFilePath, destinationFilePath, cancellationToken));
-            }
+                var chunkData = GetChunkData(fileSize, sourceMmf);
+                var noOfParallelTasks = _options.MaxMemoryUsageMb / _options.ApproximateChunkFileSizeMb / 2;
+                for (int i = 0; i < chunkData.Count / noOfParallelTasks; i++)
+                {
+                    var chunksForTask = new Dictionary<long, int>();
+                    int j = 0;
+                    int nextChunk = i;
+                    foreach (var chunkInfo in chunkData)
+                    {
+                        if (j == nextChunk)
+                        {
+                            chunksForTask[chunkInfo.Key] = chunkInfo.Value;
+                            nextChunk = chunksForTask.Count * noOfParallelTasks + i;
+                        }
+                        j++;
+                    }
+
+                    //var chunksForTask = chunkData.Skip(i * noOfParallelTasks).Take(noOfParallelTasks).ToDictionary(c => c.Key, c => c.Value);
+                    tasks.Add(SortChunks(chunksForTask, fileSize, sourceFilePath, destinationFilePath, cancellationToken));
+                }
+            };
 
             await Task.Run(() => Task.WhenAll(tasks), cancellationToken);
         }
 
-        private async Task SortChunks(Dictionary<long, int> chunkData, long fileSize, string sourceFilePath, string destinationFilePath, CancellationToken cancellationToken)
+        private async Task SortChunks(Dictionary<long, int> chunkData, long fileSize, MemoryMappedFile sourceMmf, string destinationFilePath, CancellationToken cancellationToken)
         {
             var newLineByte = (byte)'\n';
             var dotByte = (byte)'.';
@@ -73,27 +88,27 @@ namespace BigFilesSorter.Services
 
             foreach(var chunkInfo in chunkData)
             {
-                using FileStream fs = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read);
-                fs.Position = chunkInfo.Key;
-
                 stopwatch.Start();
-                byte[] data = new byte[chunkInfo.Value];
-                await fs.ReadAsync(data, 0, chunkInfo.Value, cancellationToken);
-                fs.Close();
-                await fs.DisposeAsync();
+
+                using (var sourceAccessor = sourceMmf.CreateViewAccessor(chunkInfo.Key, chunkInfo.Value))
+                {
+                    byte[] data = new byte[chunkInfo.Value];
+                    sourceAccessor.ReadArray(0, data, 0, chunkInfo.Value);
+                    sourceAccessor.Dispose();
+                }
 
                 try
                 {
                     //data = GetSortedData(data, newLineByte, dotByte);
                     await _semaphore.WaitAsync();
-                    destinationFilePath = Path.Combine(_options.DestinationDirectory, $"{Guid.NewGuid()}.txt");
-                    using (FileStream dfs = new FileStream(destinationFilePath, FileMode.OpenOrCreate, FileAccess.Write))
-                    {
-                        await dfs.WriteAsync(data, 0, chunkInfo.Value, cancellationToken);
-                        await dfs.FlushAsync();
-                        dfs.Close();
-                        await dfs.DisposeAsync();
-                    }
+                    //destinationFilePath = Path.Combine(_options.DestinationDirectory, $"{Guid.NewGuid()}.txt");
+                    //using (FileStream dfs = new FileStream(destinationFilePath, FileMode.OpenOrCreate, FileAccess.Write))
+                    //{
+                    //    await dfs.WriteAsync(data, 0, chunkInfo.Value, cancellationToken);
+                    //    await dfs.FlushAsync();
+                    //    dfs.Close();
+                    //    await dfs.DisposeAsync();
+                    //}
                 }
                 finally
                 {
@@ -158,7 +173,7 @@ namespace BigFilesSorter.Services
                 .ToArray();
         }
 
-        private Dictionary<long, int> GetChunkData(long fileSize)
+        private Dictionary<long, int> GetChunkData(long fileSize, MemoryMappedFile mmf)
         {
             var newLineByte = (byte)'\n';
             var filePath = Path.Combine(_options.SourceDirectory, _options.SourceFileName);
@@ -167,41 +182,38 @@ namespace BigFilesSorter.Services
 
             long[] chunkEndIndexes = new long[noOfChunks];
 
-            using (var sourceMmf = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, "dataProcessing"))
+            long offset = approximateChunkSize;
+            for (int i = 0; i < noOfChunks; i++)
             {
-                long offset = approximateChunkSize;
-                for (int i = 0; i < noOfChunks; i++)
+                using (var sourceAccessor = mmf.CreateViewAccessor(offset, _options.ApproximateLineLength * 2))
                 {
-                    using (var sourceAccessor = sourceMmf.CreateViewAccessor(offset, _options.ApproximateLineLength * 2))
+                    byte[] searchBytes = new byte[_options.ApproximateLineLength];
+                    sourceAccessor.ReadArray(0, searchBytes, 0, _options.ApproximateLineLength);
+                    var newLineIndex = Array.IndexOf(searchBytes, newLineByte);
+
+                    if (newLineIndex < 0)
+                        _logger.LogError("File structure is not correct");
+
+                    chunkEndIndexes[i] = offset + newLineIndex;
+
+                    if (offset + approximateChunkSize > fileSize)
                     {
-                        byte[] searchBytes = new byte[_options.ApproximateLineLength];
-                        sourceAccessor.ReadArray(0, searchBytes, 0, _options.ApproximateLineLength);
-                        var newLineIndex = Array.IndexOf(searchBytes, newLineByte);
-
-                        if (newLineIndex < 0)
-                            _logger.LogError("File structure is not correct");
-
-                        chunkEndIndexes[i] = offset + newLineIndex;
-
-                        if (offset + approximateChunkSize > fileSize)
-                        {
-                            chunkEndIndexes[i] = fileSize - 1;
-                            break;
-                        }
-
-                        offset += approximateChunkSize;
+                        chunkEndIndexes[i] = fileSize - 1;
+                        break;
                     }
+
+                    offset += approximateChunkSize;
                 }
-            };
+            }
 
             var chunkData = new Dictionary<long, int>();
             long chunkStartPoint = 0;
 
             for (int i = 0; i < chunkEndIndexes.Length; i++)
             {
-                var offset = chunkEndIndexes[i];
-                chunkData[chunkStartPoint] = (int)(offset - chunkStartPoint + 1);
-                chunkStartPoint = offset + 1;
+                var currentOffset = chunkEndIndexes[i];
+                chunkData[chunkStartPoint] = (int)(currentOffset - chunkStartPoint + 1);
+                chunkStartPoint = currentOffset + 1;
             }
 
             return chunkData;
