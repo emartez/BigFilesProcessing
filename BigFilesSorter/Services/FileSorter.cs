@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -20,6 +21,10 @@ namespace BigFilesSorter.Services
 
         [DllImport("msvcrt.dll", CallingConvention = CallingConvention.Cdecl)]
         static extern int memcmp(byte[] b1, byte[] b2, long count);
+
+        static readonly IComparer<byte[]> _comparer = Comparer<byte[]>.Create(
+            (byte[] firstLine, byte[] secondLine) => memcmp(firstLine, secondLine, firstLine.Length)
+        );
 
         private readonly ILogger<FileSorter> _logger;
         private readonly IBackgroundFileSorterQueue _backgroundQueue;
@@ -37,10 +42,6 @@ namespace BigFilesSorter.Services
             _semaphore = new SemaphoreSlim(0, _options.WriterSemaphorAccess);
         }
 
-        static readonly IComparer<byte[]> _comparer = Comparer<byte[]>.Create(
-            (byte[] firstLine, byte[] secondLine) => memcmp(firstLine, secondLine, firstLine.Length)
-        );
-
         public async Task SortAsync(CancellationToken cancellationToken)
         {
             var sourceFilePath = Path.Combine(_options.SourceDirectory, _options.SourceFileName);
@@ -51,8 +52,8 @@ namespace BigFilesSorter.Services
             _semaphore.Release(_options.WriterSemaphorAccess);
             var tasks = new List<Task>();
 
-            var noOfParallelTasks = _options.MaxMemoryUsageMb / _options.ApproximateChunkFileSizeMb / 3;
-            for (int i = 0; i < chunkData.Count / noOfParallelTasks; i++)
+            var noOfParallelTasks = _options.MaxMemoryUsageMb / _options.ApproximateChunkFileSizeMb / 7;
+            for (int i = 0; i < noOfParallelTasks; i++)
             {
                 var chunksForTask = new Dictionary<long, int>();
                 int j = 0;
@@ -66,7 +67,7 @@ namespace BigFilesSorter.Services
                     }
                     j++;
                 }
-                //var chunksForTask2 = chunkData.Skip(i * noOfParallelTasks).Take(noOfParallelTasks).ToDictionary(c => c.Key, c => c.Value);
+                Console.WriteLine(chunksForTask.Sum(c => c.Value));
                 tasks.Add(SortChunks(chunksForTask, fileSize, sourceFilePath, destinationFilePath, cancellationToken));
             }
 
@@ -94,24 +95,25 @@ namespace BigFilesSorter.Services
 
                 try
                 {
-                    //data = GetSortedData(data, newLineByte, dotByte);
+                    data = GetSortedData(data, newLineByte, dotByte);
                     await _semaphore.WaitAsync();
-                    //destinationFilePath = Path.Combine(_options.DestinationDirectory, $"{Guid.NewGuid()}.txt");
+                    destinationFilePath = Path.Combine(_options.DestinationDirectory, $"{Guid.NewGuid()}.txt");
                     using (FileStream dfs = new FileStream(destinationFilePath, FileMode.OpenOrCreate, FileAccess.Write))
                     {
-                        dfs.Position = chunkInfo.Key;
                         await dfs.WriteAsync(data, 0, chunkInfo.Value, cancellationToken);
                         await dfs.FlushAsync();
                         dfs.Close();
                         await dfs.DisposeAsync();
                         data = null;
                     }
+
+                    if (chunkCount % 3 == 0)
+                        GC.Collect();
                 }
                 finally
                 {
                     _semaphore.Release();
-                }
-                
+                }                
 
                 stopwatch.Stop();
                 Console.WriteLine($"Written {chunkCount} chunk, time {stopwatch.Elapsed.TotalSeconds}, size {chunkInfo.Key / 1024f / 1024f:0.000}");
@@ -141,8 +143,7 @@ namespace BigFilesSorter.Services
             if (!lineBreaks.Any())
                 _logger.LogError($"File structure is not correct");
 
-            //var sortedSentences = new byte[lineBreaks.Length][][];
-            var sortedSentences = new List<(byte[] sentence, byte[] text, byte[] id)>();
+            var sortedSentences = new List<(byte[] sentence, byte[] text, BigInteger id)>();
 
             for (long j = 0, startIndex = 0; j < lineBreaks.Length; j++)
             {
@@ -150,22 +151,13 @@ namespace BigFilesSorter.Services
                 Array.Copy(data, startIndex, sentence, 0, lineBreaks[j] - startIndex + 1);
 
                 dotIndex = Array.IndexOf(sentence, dotByte);
-
-                var id = new byte[12];
-                var text = new byte[_options.ApproximateLineLength];
-
-                var idC = new byte[dotIndex];
-                Array.Copy(sentence, idC, dotIndex);
-                id = (new byte[12 - dotIndex]).Concat(idC).ToArray();
-                Array.Copy(sentence, dotIndex + 1, text, 0, sentence.Length - 1 - dotIndex);
-
-                sortedSentences.Add((sentence, text, id));
+                sortedSentences.Add((sentence, sentence.TakeLast(sentence.Length - dotIndex - 1).ToArray(), new BigInteger(sentence.Take(dotIndex).ToArray())));
                 startIndex = lineBreaks[j] + 1;
             }
 
             return sortedSentences
                 .OrderBy(s => s.text, _comparer)
-                .ThenBy(s => s.id, _comparer)
+                .ThenBy(s => s.id)
                 .SelectMany(s => s.sentence)
                 .ToArray();
         }
