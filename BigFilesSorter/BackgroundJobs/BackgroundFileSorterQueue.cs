@@ -6,14 +6,14 @@ namespace BigFilesSorter.BackgroundJobs
 {
     public class BackgroundFileSorterQueue : IBackgroundFileSorterQueue
     {
-        private readonly ConcurrentQueue<KeyValuePair<long, int>> _items = new();
+        private readonly ConcurrentQueue<Dictionary<long, int>> _items = new();
 
-        public void Enqueue(KeyValuePair<long, int> chunkInfo)
+        public void Enqueue(Dictionary<long, int> chunkInfo)
         {
             _items.Enqueue(chunkInfo);
         }
 
-        public bool TryDequeue(out KeyValuePair<long, int> result)
+        public bool TryDequeue(out Dictionary<long, int> result)
         {
             return _items.TryDequeue(out result);
         }

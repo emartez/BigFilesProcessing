@@ -4,9 +4,9 @@ namespace BigFilesSorter.BackgroundJobs
 {
     public interface IBackgroundFileSorterQueue
     {
-        void Enqueue(KeyValuePair<long, int> chunkInfo);
+        void Enqueue(Dictionary<long, int> chunkData);
         int GetQueueLength();
-        bool TryDequeue(out KeyValuePair<long, int> result);
+        bool TryDequeue(out Dictionary<long, int> chunkData);
         bool IsEmpty();
     }
 }
