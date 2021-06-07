@@ -15,12 +15,12 @@ namespace BigFilesGenerator.BackgroundJobs
         private readonly IBackgroundFileWriterQueue _writerQueue;
         private readonly ILogger<BackgroundHostedFileWriter> _logger;
         private readonly IHostApplicationLifetime _appLifetime;
-        private readonly SorterOptions _options;
+        private readonly GeneratorOptions _options;
 
         public BackgroundHostedFileWriter(
             IBackgroundFileWriterQueue writerQueue, 
             ILogger<BackgroundHostedFileWriter> logger, 
-            IOptions<SorterOptions> options,
+            IOptions<GeneratorOptions> options,
             IHostApplicationLifetime appLifetime)
         {
             _writerQueue = writerQueue ?? throw new ArgumentNullException(nameof(writerQueue));

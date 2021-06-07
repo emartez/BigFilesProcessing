@@ -15,12 +15,12 @@ namespace BigFilesGenerator.Startup
     {
         private readonly IHostApplicationLifetime _appLifetime;
         private readonly ILogger<StartupService> _logger;
-        private readonly SorterOptions _options;
+        private readonly GeneratorOptions _options;
         private readonly IFileGenerator _fileGenerator;
 
         public StartupService(IHostApplicationLifetime appLifetime, 
             ILogger<StartupService> logger, 
-            IOptions<SorterOptions> options, 
+            IOptions<GeneratorOptions> options, 
             IFileGenerator fileGenerator)
         {
             _appLifetime = appLifetime ?? throw new ArgumentNullException(nameof(appLifetime));

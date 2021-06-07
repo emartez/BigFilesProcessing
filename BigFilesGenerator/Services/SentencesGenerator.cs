@@ -13,13 +13,13 @@ namespace BigFilesGenerator.Services
     {
         private const string SENTENCES_LIBRARY = "Sentences.txt";
         private readonly ITextResourceProvider _textResourceProvider;
-        private readonly SorterOptions _options;
+        private readonly GeneratorOptions _options;
         private static SemaphoreSlim _sentencesLock = new SemaphoreSlim(1,1);
         private static string[] _sentences = null;
 
         public SentencesGenerator(
             ITextResourceProvider textResourceProvider, 
-            IOptions<SorterOptions> options)
+            IOptions<GeneratorOptions> options)
         {
             _textResourceProvider = textResourceProvider ?? throw new ArgumentNullException(nameof(textResourceProvider));
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));

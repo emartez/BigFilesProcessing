@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using System;
 using BigFilesSorter.Configurations;
+using BigFilesSorter.BackgroundJobs;
 
 namespace BigFilesSorter.Startup
 {
@@ -31,6 +32,8 @@ namespace BigFilesSorter.Startup
 
                         services.Configure<SorterOptions>(configuration.GetSection(SorterOptions.Generator));
                         services.AddHostedService<StartupService>();
+                        //services.AddSingleton<IBackgroundFileSorterQueue, BackgroundFileSorterQueue>();
+                        //services.AddHostedService<BackgroundHostedFileSorter>();
                     })
                     .ConfigureLogging(logging =>
                     {

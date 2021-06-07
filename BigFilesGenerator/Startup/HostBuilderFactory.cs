@@ -30,7 +30,7 @@ namespace BigFilesGenerator.Startup
                                 .AsMatchingInterface()
                                 .WithTransientLifetime());
 
-                        services.Configure<SorterOptions>(configuration.GetSection(SorterOptions.Generator));
+                        services.Configure<GeneratorOptions>(configuration.GetSection(GeneratorOptions.Generator));
                         services.AddSingleton<IBackgroundFileWriterQueue, BackgroundFileWriterQueue>();
                         services.AddHostedService<StartupService>();
                         services.AddHostedService<BackgroundHostedFileWriter>();

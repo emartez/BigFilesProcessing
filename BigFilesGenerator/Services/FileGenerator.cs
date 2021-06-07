@@ -15,12 +15,12 @@ namespace BigFilesGenerator.Services
         private readonly ISentencesGenerator _sentencesGenerator;
         private readonly IBackgroundFileWriterQueue _writerQueue;
         private readonly ILogger<FileGenerator> _logger;
-        private readonly SorterOptions _options;
+        private readonly GeneratorOptions _options;
 
         public FileGenerator(ISentencesGenerator sentencesGenerator,
             IBackgroundFileWriterQueue writerQueue,
             ILogger<FileGenerator> logger,
-            IOptions<SorterOptions> options)
+            IOptions<GeneratorOptions> options)
         {
             _sentencesGenerator = sentencesGenerator ?? throw new ArgumentNullException(nameof(sentencesGenerator));
             _writerQueue = writerQueue ?? throw new ArgumentNullException(nameof(writerQueue));

@@ -1,6 +1,6 @@
 ﻿namespace BigFilesGenerator.Configurations
 {
-    public class SorterOptions
+    public class GeneratorOptions
     {
         public const string Generator = "Generator";
 

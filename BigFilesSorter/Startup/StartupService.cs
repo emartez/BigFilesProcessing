@@ -40,12 +40,13 @@ namespace BigFilesSorter.Startup
                             return;
 
                         _logger.LogInformation("Application started.");
-                        await IoService.RecreateDirectory(_options.DestinationDirectory, _logger);
+                        //await IoService.RecreateDirectory(_options.DestinationDirectory, _logger);
 
                         Console.WriteLine($"\nPress any key to continue...");
                         Console.ReadKey();
 
                         await Run(cancellationToken);
+                        Console.ReadLine();
                     }
                     catch (Exception ex)
                     {
