@@ -17,13 +17,14 @@ namespace BigFilesSorter.Services
 {
     public class FileSorter : IFileSorter
     {
+
         [DllImport("msvcrt.dll", CallingConvention = CallingConvention.Cdecl)]
         static extern int memcmp(byte[] b1, byte[] b2, long count);
 
         private readonly ILogger<FileSorter> _logger;
         private readonly IBackgroundFileSorterQueue _backgroundQueue;
         private readonly SorterOptions _options;
-        private static SemaphoreSlim semaphore = new SemaphoreSlim(0, 1);
+        private readonly SemaphoreSlim _semaphore;
 
         public FileSorter(
             ILogger<FileSorter> logger,
@@ -33,103 +34,28 @@ namespace BigFilesSorter.Services
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _backgroundQueue = backgroundQueue;
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            _semaphore = new SemaphoreSlim(0, _options.WriterSemaphorAccess);
         }
 
         static readonly IComparer<byte[]> _comparer = Comparer<byte[]>.Create(
-            (byte[] firstLine, byte[] secondLine) => Comparer(firstLine, secondLine)
+            (byte[] firstLine, byte[] secondLine) => memcmp(firstLine, secondLine, firstLine.Length)
         );
-
-        static readonly IComparer<(byte[], byte[], byte[])> _comparer2 = Comparer<(byte[], byte[], byte[])>.Create(
-            ((byte[], byte[], byte[]) firstLine, (byte[], byte[], byte[]) secondLine) => Comparer2(firstLine, secondLine)
-        );
-
-        static int Comparer2((byte[], byte[], byte[]) firstLine, (byte[], byte[], byte[]) secondLine)
-        {
-            return memcmp(firstLine.Item2, secondLine.Item2, firstLine.Item2.Length);
-        }
-
-        static int Comparer(byte[] firstLine, byte[] secondLine)
-        {
-
-            return memcmp(firstLine, secondLine, firstLine.Length);
-            //return memcmp(firstLine, secondLine, firstLine.Length);
-            //var firstHash = firstLine.GetHashCode();
-            //var secondHash = secondLine.GetHashCode();
-
-            //if (firstHash < secondHash)
-            //    return -1;
-            //else if (firstHash > secondHash)
-            //    return 1;
-            //else
-            //    return 0;
-
-            //var testString = memcmp(testStringArray, testString2Array, testString2Array.Length);
-
-            //var testIntArray = Encoding.UTF8.GetBytes("1.345");
-            //var testInt2Array = Encoding.UTF8.GetBytes("123001");
-            //var testIntEArray = BitConverter.ToInt16(testIntArray);
-            //var testInt2EArray = BitConverter.ToInt16(testInt2Array);
-            //var testInt = memcmp(testStringArray, testString2Array, 5);
-            //return memcmp(firstLine, secondLine, firstLine.Length);
-            var newLine = (byte)'.';
-            var index1 = Array.IndexOf(firstLine, (byte)newLine);
-            var index2 = Array.IndexOf(secondLine, (byte)newLine);
-
-            if (index1 < 0) 
-                return index2 < 0 ? 0 : 1;
-
-            if (index2 < 0)
-                return index1 < 0 ? 0 : -1;
-
-            var firstTextId = new byte[index1];
-            Array.Copy(firstLine, firstTextId, index1);
-
-            var secondTextId = new byte[index2];
-            Array.Copy(secondLine, secondTextId, index2);
-
-            var firstText = new byte[firstLine.Length - 1 - index1];
-            Array.Copy(firstLine, index1 + 1, firstText, 0, firstLine.Length - 1 - index1);
-
-            var secondText = new byte[secondLine.Length - 1 - index2];
-            Array.Copy(secondLine, index2 + 1, secondText, 0, secondLine.Length - 1 - index2);
-
-            return memcmp(firstLine, secondLine, firstLine.Length);
-
-            if (memcmp(firstText, secondText, firstText.Length) < 0 || firstTextId.Length < secondTextId.Length || (firstTextId.Length == secondTextId.Length && memcmp(firstTextId, secondTextId, firstText.Length) < 0))
-                return -1;
-            else if (memcmp(firstText, secondText, firstText.Length) > 0 || firstTextId.Length > secondTextId.Length || (firstTextId.Length == secondTextId.Length && memcmp(firstTextId, secondTextId, firstText.Length) > 0))
-                return 1;
-            else
-                return 0;
-        }
 
         public async Task SortAsync(CancellationToken cancellationToken)
         {
-            var testStringArray = Encoding.UTF8.GetBytes("1124. chats slepa kura");
-            var testString2Array = Encoding.UTF8.GetBytes("11231. chats slepa kura");
-            var result = Comparer(testStringArray, testString2Array);
-
             var sourceFilePath = Path.Combine(_options.SourceDirectory, _options.SourceFileName);
             var destinationFilePath = Path.Combine(_options.DestinationDirectory, _options.DestinationFileName);
             var fileSize = new FileInfo(sourceFilePath).Length;
+            var chunkData = GetChunkData(fileSize);
 
-            long offset = 0x00000000; // 256 megabytes
-            long length = 0x20000000; // 512 megabytes
-            var newLineByte = (byte)'\n';
-
-            var chunkData = GetChunkData(fileSize, newLineByte);
-
-            //var chunksForBj = chunkData.Take(100).ToDictionary(c => c.Key, c => c.Value);
-            //var chunksForMain = chunkData.Skip(100).ToDictionary(c => c.Key, c => c.Value);
-            //_backgroundQueue.Enqueue(chunksForBj);
-
-            semaphore.Release(1);
+            _semaphore.Release(_options.WriterSemaphorAccess);
             var tasks = new List<Task>();
-            
-            //using var sourceMmf = MemoryMappedFile.CreateFromFile(sourceFilePath, FileMode.Open, "dataProcessing");
-            for (int i = 0; i < chunkData.Count / 20; i++)
+
+            var noOfParallelTasks = _options.MaxMemoryUsageMb / _options.ApproximateChunkFileSizeMb / 10;
+            for (int i = 0; i < chunkData.Count / noOfParallelTasks; i++)
             {
-                tasks.Add(SortChunks(chunkData.Skip(i * 20).Take(20).ToDictionary(c => c.Key, c => c.Value), fileSize, sourceFilePath, destinationFilePath, cancellationToken));
+                var chunksForTask = chunkData.Skip(i * noOfParallelTasks).Take(noOfParallelTasks).ToDictionary(c => c.Key, c => c.Value);
+                tasks.Add(SortChunks(chunksForTask, fileSize, sourceFilePath, destinationFilePath, cancellationToken));
             }
 
             await Task.Run(() => Task.WhenAll(tasks), cancellationToken);
@@ -145,25 +71,21 @@ namespace BigFilesSorter.Services
             var stopwatch = new Stopwatch();
             var chunkCount = 1;
 
-
-            long size = 0;
             foreach(var chunkInfo in chunkData)
             {
                 using FileStream fs = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read);
-                fs.Position = size;
+                fs.Position = chunkInfo.Key;
 
                 stopwatch.Start();
                 byte[] data = new byte[chunkInfo.Value];
                 await fs.ReadAsync(data, 0, chunkInfo.Value, cancellationToken);
-                size = chunkInfo.Key;
-
                 fs.Close();
                 await fs.DisposeAsync();
 
                 try
                 {
-                    await semaphore.WaitAsync();
-                    data = GetSortedData(data, newLineByte, dotByte);
+                    //data = GetSortedData(data, newLineByte, dotByte);
+                    await _semaphore.WaitAsync();
                     destinationFilePath = Path.Combine(_options.DestinationDirectory, $"{Guid.NewGuid()}.txt");
                     using (FileStream dfs = new FileStream(destinationFilePath, FileMode.OpenOrCreate, FileAccess.Write))
                     {
@@ -175,12 +97,12 @@ namespace BigFilesSorter.Services
                 }
                 finally
                 {
-                    semaphore.Release();
+                    _semaphore.Release();
                 }
                 
 
                 stopwatch.Stop();
-                Console.WriteLine($"Written {chunkCount} chunk, time {stopwatch.Elapsed.TotalSeconds}, size {size / 1024f / 1024f:0.000}");
+                Console.WriteLine($"Written {chunkCount} chunk, time {stopwatch.Elapsed.TotalSeconds}, size {chunkInfo.Key / 1024f / 1024f:0.000}");
                 chunkCount++;
             };
         }
@@ -218,14 +140,14 @@ namespace BigFilesSorter.Services
                 dotIndex = Array.IndexOf(sentence, dotByte);
 
                 var id = new byte[12];
-                var text = new byte[100];
+                var text = new byte[_options.ApproximateLineLength];
 
                 var idC = new byte[dotIndex];
                 Array.Copy(sentence, idC, dotIndex);
                 id = (new byte[12 - dotIndex]).Concat(idC).ToArray();
                 Array.Copy(sentence, dotIndex + 1, text, 0, sentence.Length - 1 - dotIndex);
 
-                sortedSentences.Add((sentence: sentence, text: text, id: id));
+                sortedSentences.Add((sentence, text, id));
                 startIndex = lineBreaks[j] + 1;
             }
 
@@ -236,11 +158,11 @@ namespace BigFilesSorter.Services
                 .ToArray();
         }
 
-        private Dictionary<long, int> GetChunkData(long fileSize, byte newLineByte)
+        private Dictionary<long, int> GetChunkData(long fileSize)
         {
+            var newLineByte = (byte)'\n';
             var filePath = Path.Combine(_options.SourceDirectory, _options.SourceFileName);
-            long approximateChunkSize = 0x500000; // 100 megabytes
-            int approximateLineLength = 100;
+            long approximateChunkSize = _options.ApproximateChunkFileSizeMb * 1024 * 1024;
             var noOfChunks = (int)(fileSize / approximateChunkSize);
 
             long[] chunkEndIndexes = new long[noOfChunks];
@@ -250,10 +172,10 @@ namespace BigFilesSorter.Services
                 long offset = approximateChunkSize;
                 for (int i = 0; i < noOfChunks; i++)
                 {
-                    using (var sourceAccessor = sourceMmf.CreateViewAccessor(offset, approximateLineLength*2))
+                    using (var sourceAccessor = sourceMmf.CreateViewAccessor(offset, _options.ApproximateLineLength * 2))
                     {
-                        byte[] searchBytes = new byte[200];
-                        sourceAccessor.ReadArray(0, searchBytes, 0, 200);
+                        byte[] searchBytes = new byte[_options.ApproximateLineLength];
+                        sourceAccessor.ReadArray(0, searchBytes, 0, _options.ApproximateLineLength);
                         var newLineIndex = Array.IndexOf(searchBytes, newLineByte);
 
                         if (newLineIndex < 0)
