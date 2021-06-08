@@ -1,13 +1,13 @@
 # BigFilesProcessing
 
-#File generator
+# File generator
 appsettings.json
 
 ResultDirectory - directory where the file will be placed at the end of generation process
 ResultFileName - file name of the generation result
 
 
-#File sorter
+# File sorter
 appsettings.json
 
 SourceDirectory: directory of the file which will be sorted
