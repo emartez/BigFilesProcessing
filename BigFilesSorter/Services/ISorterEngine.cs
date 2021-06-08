@@ -6,6 +6,7 @@ namespace BigFilesSorter.Services
 {
     public interface ISorterEngine
     {
-        Task SortChunks(Dictionary<long, int> chunkData, CancellationToken cancellationToken);
+        Task MergeTheChunks(string destinationDirectory, string destinationFile, CancellationToken cancellationToken);
+        Task SplitToChunksParallely(Dictionary<long, int> chunkData, CancellationToken cancellationToken);
     }
 }

@@ -67,7 +67,7 @@ namespace BigFilesSorter.BackgroundJobs
                         continue;
 
                     Console.WriteLine("Scheduled from 1111111111111");
-                    await _sorterEngine.SortChunks(chunkData, cancellationToken);
+                    //await _sorterEngine.SplitToChunks(chunkData, cancellationToken);
 
                 }
                 catch (OperationCanceledException ex)

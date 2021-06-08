@@ -10,6 +10,7 @@
         public string SourceFileName { get; set; }
         public byte WriterSemaphorAccess { get; set; }
         public int ApproximateLineLength { get; set; }
+        public int ApproximateTotalRecords { get; set; }
         public int ApproximateChunkFileSizeMb { get; set; }
         public int MaxMemoryUsageMb { get; set; }
     }

@@ -46,6 +46,7 @@ namespace BigFilesSorter.Startup
                         Console.ReadKey();
 
                         await Run(cancellationToken);
+                        _logger.LogInformation("Application Finished.");
                         Console.ReadLine();
                     }
                     catch (Exception ex)
